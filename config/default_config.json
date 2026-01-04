@@ -1,0 +1,20 @@
+{
+  "window": {
+    "geometry": null,
+    "maximized": false,
+    "current_panel": "library"
+  },
+  "theme": {
+    "name": "dark",
+    "accent_color": "#007AFF"
+  },
+  "panels": {
+    "library": {
+      "date_format": "YYYY.mm.dd. HH:MM:SS"
+    },
+    "develop": {},
+    "print": {},
+    "slideshow": {},
+    "website": {}
+  }
+}
