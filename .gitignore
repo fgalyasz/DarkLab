@@ -1,0 +1,7 @@
+photo_editor.log
+src/logs/library_panel.log
+photo_editor.log
+src/ui/panels/__pycache__/library_panel.cpython-314.pyc
+src/ui/widgets/__pycache__/__init__.cpython-314.pyc
+src/ui/widgets/__pycache__/image_item_delegate.cpython-314.pyc
+src/ui/widgets/__pycache__/image_list_model.cpython-314.pyc

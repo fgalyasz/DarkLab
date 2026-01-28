@@ -1,30 +1,202 @@
-"""
-Library Panel for Photo Editor
-Handles photo library management with folder tree and metadata
+"""Library Panel for Photo Editor.
+
+Handles photo library management with folder tree and metadata.
+Includes threaded image loading with cancellation and detailed logging.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
+import time
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem,
-    QListWidget, QListWidgetItem, QScrollArea, QWidget, QFrame,
+    QListWidget, QListWidgetItem, QListView, QScrollArea, QWidget, QFrame,
     QSplitter, QLineEdit, QSpinBox, QFormLayout, QGroupBox, QCheckBox,
-    QGridLayout, QTextEdit, QSizePolicy, QPushButton
+    QGridLayout, QTextEdit, QSizePolicy, QPushButton, QProgressBar,
+    QAbstractItemView
 )
-from PyQt6.QtCore import Qt, QDir, QFileSystemWatcher, QSize, QTimer
-from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtCore import Qt, QDir, QFileSystemWatcher, QSize, QTimer, QThread, pyqtSignal, QThreadPool, QRunnable, QObject, QEvent
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader
 
 from src.config.config_manager import ConfigManager
+from src.ui.widgets.image_list_model import ImageListModel
+from src.ui.widgets.image_item_delegate import ImageItemDelegate
 from .base_panel import BasePanel
+
+
+logger = logging.getLogger(__name__)
+
+# Ensure file-based logging for this module in addition to any global handlers
+_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_log_path = os.path.join(_log_dir, "library_panel.log")
+
+_file_handler_exists = False
+for _h in logger.handlers:
+    if isinstance(_h, logging.FileHandler) and getattr(_h, "baseFilename", None) == _log_path:
+        _file_handler_exists = True
+        break
+
+if not _file_handler_exists:
+    _fh = logging.FileHandler(_log_path, encoding="utf-8")
+    _fh.setLevel(logging.DEBUG)
+    _fh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(_fh)
+
+logger.setLevel(logging.DEBUG)
+
+
+class ImageProcessorRunnable(QRunnable):
+    """Runnable for processing a batch of images"""
+    
+    def __init__(self, image_paths: List[str], batch_id: int, target_size: int):
+        super().__init__()
+        self.image_paths = image_paths
+        self.batch_id = batch_id
+        self.target_size = max(32, int(target_size))
+        self.signals = ImageProcessorSignals()
+    
+    def run(self):
+        """Process a batch of images: load files into QImage in worker thread"""
+        try:
+            logger.debug("[LIB][RUN] Batch %s started with %s images", self.batch_id, len(self.image_paths))
+            for index, image_path in enumerate(self.image_paths):
+                if self.signals.cancelled:
+                    logger.debug("[LIB][RUN] Batch %s cancelled before image %s", self.batch_id, index)
+                    break
+
+                reader = QImageReader(str(image_path))
+                reader.setAutoTransform(True)
+                original_size = reader.size()
+                if original_size.isValid() and original_size.width() > 0 and original_size.height() > 0:
+                    max_side = max(original_size.width(), original_size.height())
+                    scale = self.target_size / max_side
+                    scaled_size = QSize(
+                        max(1, int(original_size.width() * scale)),
+                        max(1, int(original_size.height() * scale)),
+                    )
+                    reader.setScaledSize(scaled_size)
+                else:
+                    reader.setScaledSize(QSize(self.target_size, self.target_size))
+                image = reader.read()
+                if image.isNull():
+                    logger.debug("[LIB][RUN] Failed to load thumbnail: %s (%s)", image_path, reader.errorString())
+                    image = QImage()
+
+                self.signals.image_found.emit(image_path, Path(image_path).name, image)
+
+                if self.signals.cancelled:
+                    break
+
+                if index % 3 == 0:
+                    time.sleep(0.0001)
+                    if self.signals.cancelled:
+                        break
+
+            logger.debug("[LIB][RUN] Batch %s finished loop", self.batch_id)
+            self.signals.batch_finished.emit(self.batch_id)
+        except Exception as error:
+            logger.error("[LIB][RUN] Error in batch %s: %s", self.batch_id, error)
+            self.signals.batch_finished.emit(self.batch_id)
+
+
+class ImageProcessorSignals(QObject):
+    """Signals for image processing"""
+    image_found = pyqtSignal(str, str, QImage)
+    batch_finished = pyqtSignal(int)
+    # Simple cooperative cancellation flag, read/write from worker
+    cancelled: bool = False
+
+
+class ImageDiscoveryThread(QThread):
+    """Thread for discovering image files (not loading them)"""
+    
+    # Signals
+    discovery_finished = pyqtSignal(list)  # List of image paths
+    progress_updated = pyqtSignal(int, int)  # current, total
+    
+    def __init__(self, folder_path: str, recursive: bool = False):
+        super().__init__()
+        self.folder_path = folder_path
+        self.recursive = recursive
+        self._is_cancelled = False
+        self.image_files = []
+        
+    def run(self):
+        """Discover image files in background thread"""
+        try:
+            folder_path = Path(self.folder_path)
+            self.image_files = []
+            print(f"Discovering images from: {folder_path}")  # Debug
+            
+            # Find all image files
+            if self.recursive:
+                image_files = self._find_images_recursive(folder_path)
+            else:
+                image_files = self._find_images_non_recursive(folder_path)
+            
+            print(f"Discovered {len(image_files)} image files")  # Debug
+            self.image_files = [str(path) for path in image_files]
+            
+            if not self._is_cancelled:
+                self.discovery_finished.emit(self.image_files)
+                
+        except Exception as e:
+            print(f"Error in image discovery thread: {e}")
+    
+    def cancel(self):
+        """Cancel the discovery process"""
+        self._is_cancelled = True
+    
+    def _find_images_recursive(self, folder_path: Path, max_depth: int = 3, current_depth: int = 0) -> List[Path]:
+        """Find image files recursively"""
+        if current_depth >= max_depth:
+            return []
+        
+        image_files = []
+        try:
+            for item in sorted(folder_path.iterdir()):
+                if self._is_cancelled:
+                    break
+                    
+                if item.is_file() and self._is_image_file(item):
+                    image_files.append(item)
+                elif item.is_dir() and not item.name.startswith('.'):
+                    image_files.extend(self._find_images_recursive(item, max_depth, current_depth + 1))
+        except (PermissionError, OSError):
+            pass
+        
+        return image_files
+    
+    def _find_images_non_recursive(self, folder_path: Path) -> List[Path]:
+        """Find image files in current folder only"""
+        image_files = []
+        try:
+            for item in sorted(folder_path.iterdir()):
+                if self._is_cancelled:
+                    break
+                    
+                if item.is_file() and self._is_image_file(item):
+                    image_files.append(item)
+        except (PermissionError, OSError):
+            pass
+        
+        return image_files
+    
+    def _is_image_file(self, file_path: Path) -> bool:
+        """Check if file is an image"""
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp'}
+        return file_path.suffix.lower() in image_extensions
 
 
 class CollapsibleGroupBox(QWidget):
     """Custom collapsible group box for metadata sections"""
     
     def __init__(self, title: str, parent=None):
-        print(f"Creating CollapsibleGroupBox with title: {title}")  # Debug
+        logger.debug("[LIB][META] Creating CollapsibleGroupBox with title: %s", title)
         try:
             super().__init__(parent)
             self.is_collapsed = False
@@ -114,27 +286,27 @@ class CollapsibleGroupBox(QWidget):
             self.main_layout.addLayout(header_layout)
             self.main_layout.addWidget(self.content_widget)
             
-            print(f"CollapsibleGroupBox created successfully: {title}")  # Debug
+            logger.debug("[LIB][META] CollapsibleGroupBox created successfully: %s", title)
         except Exception as e:
-            print(f"Error creating CollapsibleGroupBox: {e}")  # Debug
+            logger.error("[LIB][META] Error creating CollapsibleGroupBox: %s", e)
     
     def toggle(self):
         """Toggle collapsed state"""
-        print(f"Toggle called, current state: {self.is_collapsed}")  # Debug
+        logger.debug("[LIB][META] Toggle called, current state: %s", self.is_collapsed)
         self.is_collapsed = not self.is_collapsed
         
         if self.is_collapsed:
             self.content_widget.hide()
             self.toggle_button.setText("▶")
             self.setFixedHeight(30)  # Only header height
-            print("Collapsed")  # Debug
+            logger.debug("[LIB][META] Collapsed")
         else:
             self.content_widget.show()
             self.toggle_button.setText("▼")
             self.setMaximumHeight(16777215)  # Remove height limit
             # Update size after showing content
             self.updateGeometry()
-            print("Expanded")  # Debug
+            logger.debug("[LIB][META] Expanded")
     
     def add_row(self, label_text: str, widget: QWidget):
         """Add a row to the content layout"""
@@ -186,8 +358,23 @@ class LibraryPanel(BasePanel):
         self.grid_columns = 5
         self.recursive_loading = False
         self.config_manager = ConfigManager()
-        self.image_widgets = {}  # Store image widgets for selection
+        self.image_model = ImageListModel()
+        self.image_list_view: Optional[QListView] = None
+        self.image_delegate: Optional[ImageItemDelegate] = None
+        self.current_icon_size = 140
         self.metadata_widgets = {}  # Store metadata edit widgets
+        
+        logger.debug("[LIB][INIT] LibraryPanel created id=%s", id(self))
+
+        # Threading variables
+        self.discovery_thread = None
+        self.thread_pool = QThreadPool()
+        # Limit parallel decodes to avoid massive RAM spikes.
+        self.thread_pool.setMaxThreadCount(4)
+        self.is_loading = False
+        self.active_processors = []  # Track active processors
+        self.total_images = 0
+        self.processed_images = 0
         
         # Override the default setup
         self._setup_library_ui()
@@ -196,6 +383,11 @@ class LibraryPanel(BasePanel):
         self.resize_timer = QTimer()
         self.resize_timer.timeout.connect(self._update_cell_sizes)
         self.resize_timer.setSingleShot(True)
+        
+        # Setup UI update timer for continuous image display
+        self.ui_update_timer = QTimer()
+        self.ui_update_timer.timeout.connect(self._continuous_ui_update)
+        self.ui_update_timer.setSingleShot(True)
     
     def _setup_library_ui(self) -> None:
         """Setup the 3-column layout"""
@@ -217,9 +409,9 @@ class LibraryPanel(BasePanel):
         self._setup_image_grid(main_splitter)
         
         # Right column - Metadata
-        print("About to setup metadata panel...")  # Debug
+        logger.debug("About to setup metadata panel...")
         self._setup_metadata_panel(main_splitter)
-        print("Metadata panel setup completed.")  # Debug
+        logger.debug("Metadata panel setup completed.")
         
         # Set initial splitter sizes (20%, 60%, 20%)
         main_splitter.setSizes([200, 600, 200])
@@ -262,6 +454,8 @@ class LibraryPanel(BasePanel):
         """Setup image grid widget"""
         middle_widget = QWidget()
         middle_layout = QVBoxLayout(middle_widget)
+        middle_layout.setContentsMargins(0, 0, 0, 0)
+        middle_layout.setSpacing(0)
         
         # Controls
         controls_layout = QHBoxLayout()
@@ -278,41 +472,97 @@ class LibraryPanel(BasePanel):
         controls_layout.addWidget(self.columns_spinbox)
         
         controls_layout.addStretch()
-        middle_layout.addLayout(controls_layout)
         
-        # Scroll area for grid
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
-        # Grid container widget
-        self.grid_widget = QWidget()
-        self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(0)  # No spacing - widget borders handle separation
-        self.grid_layout.setContentsMargins(0, 0, 0, 0)  # No margins
-        self.grid_widget.setLayout(self.grid_layout)
-        self.grid_widget.setStyleSheet("""
-            QWidget {
-                background-color: rgb(35, 35, 40);  # Panel background color
+        # Progress bar and cancel button
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid rgb(60, 60, 65);
+                border-radius: 3px;
+                text-align: center;
+                color: white;
+                background-color: rgb(40, 40, 45);
+            }
+            QProgressBar::chunk {
+                background-color: rgb(0, 122, 255);
+                border-radius: 2px;
             }
         """)
-        self.grid_widget.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Preferred
+        controls_layout.addWidget(self.progress_bar)
+        
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setVisible(False)
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: rgb(220, 50, 50);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 5px 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgb(240, 70, 70);
+            }
+            QPushButton:pressed {
+                background-color: rgb(200, 30, 30);
+            }
+        """)
+        self.cancel_button.clicked.connect(self._cancel_loading)
+        # Extra debug to see if button gets pressed events
+        self.cancel_button.pressed.connect(
+            lambda: logger.debug(
+                "[LIB][UI] Cancel button PRESSED (panel_id=%s, button_id=%s)",
+                id(self), id(self.cancel_button)
+            )
         )
+        logger.debug("[LIB][UI] Cancel button created on panel id=%s, button id=%s", id(self), id(self.cancel_button))
+        controls_layout.addWidget(self.cancel_button)
+        middle_layout.addLayout(controls_layout)
         
-        scroll_area.setWidget(self.grid_widget)
-        middle_layout.addWidget(scroll_area)
-        
-        # Store reference for updates
-        self.image_grid_container = scroll_area
-        
+        # QListView-based grid
+        self.image_list_view = QListView()
+        self.image_list_view.setFrameShape(QFrame.Shape.NoFrame)
+        self.image_list_view.setContentsMargins(0, 0, 0, 0)
+        self.image_list_view.setViewportMargins(0, 0, 0, 0)
+        self.image_list_view.setViewMode(QListView.ViewMode.IconMode)
+        self.image_list_view.setResizeMode(QListView.ResizeMode.Adjust)
+        self.image_list_view.setMovement(QListView.Movement.Static)
+        self.image_list_view.setSpacing(2)
+        self.image_list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.image_list_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.image_list_view.setLayoutMode(QListView.LayoutMode.SinglePass)
+        self.image_list_view.setFlow(QListView.Flow.LeftToRight)
+        self.image_list_view.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.image_list_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.image_list_view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.image_list_view.verticalScrollBar().setSingleStep(20)
+        self.image_list_view.verticalScrollBar().setPageStep(200)
+        self.image_list_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.image_list_view.setSelectionRectVisible(False)
+        self.image_list_view.setUniformItemSizes(False)
+        self.image_list_view.setMouseTracking(True)
+        self.image_list_view.setWordWrap(True)
+        self.image_list_view.setWrapping(True)
+        self.image_list_view.setStyleSheet("""
+            QListView {
+                background-color: rgb(35, 35, 40);
+                border: none;
+            }
+        """)
+        self.image_delegate = ImageItemDelegate(self.image_list_view)
+        self.image_list_view.setItemDelegate(self.image_delegate)
+        self.image_list_view.setModel(self.image_model)
+        self.image_list_view.selectionModel().selectionChanged.connect(self._on_view_selection_changed)
+        middle_layout.addWidget(self.image_list_view)
+        self._update_icon_metrics()
+
         parent.addWidget(middle_widget)
     
     def _setup_metadata_panel(self, parent: QSplitter) -> None:
         """Setup metadata panel"""
-        print("Setting up metadata panel...")  # Debug
+        logger.debug("Setting up metadata panel...")
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         
@@ -330,80 +580,29 @@ class LibraryPanel(BasePanel):
         self.metadata_widget = QWidget()
         self.metadata_layout = QVBoxLayout(self.metadata_widget)  # Changed to QVBoxLayout
         
-        # Add some test metadata to show collapsible groups
-        print("Adding test metadata groups...")  # Debug
-        
-        # Try adding a simple group first
-        try:
-            print("Creating simple test group...")  # Debug
-            simple_widget = QWidget()
-            simple_widget.setStyleSheet("background-color: red; border: 1px solid white;")
-            simple_widget.setFixedHeight(50)
-            simple_label = QLabel("TEST GROUP")
-            simple_label.setStyleSheet("color: white; font-size: 12px;")
-            simple_layout = QVBoxLayout(simple_widget)
-            simple_layout.addWidget(simple_label)
-            self.metadata_layout.addWidget(simple_widget)
-            print("Simple test group added successfully")  # Debug
-        except Exception as e:
-            print(f"Error adding simple test group: {e}")  # Debug
-        
-        # Now add simple collapsible groups
-        print("Adding simple collapsible groups...")  # Debug
-        
-        # File Information group
-        try:
-            file_group = self._create_simple_collapsible_group("File Information", {
-                "Filename": "test.jpg",
-                "Path": "/path/to/test.jpg",
-                "Size": "2.5 MB",
-                "Modified": "2024.01.01. 12:00:00"
-            })
-            self.metadata_layout.addWidget(file_group)
-            print("File Information group added")  # Debug
-        except Exception as e:
-            print(f"Error adding File Information group: {e}")  # Debug
-        
-        # EXIF Data group
-        try:
-            exif_group = self._create_simple_collapsible_group("EXIF Data", {
-                "Camera": "Canon EOS R5",
-                "Lens": "RF 24-70mm f/2.8L IS USM",
-                "Focal Length": "50mm",
-                "Aperture": "f/2.8",
-                "Shutter Speed": "1/125",
-                "ISO": "400"
-            })
-            self.metadata_layout.addWidget(exif_group)
-            print("EXIF Data group added")  # Debug
-        except Exception as e:
-            print(f"Error adding EXIF Data group: {e}")  # Debug
-        
-        # IPTC Data group
-        try:
-            iptc_group = self._create_simple_collapsible_group("IPTC Data", {
-                "Title": "Test Photo",
-                "Description": "This is a test photo description",
-                "Keywords": "test, photo, sample",
-                "Copyright": "© 2024 Test"
-            })
-            self.metadata_layout.addWidget(iptc_group)
-            print("IPTC Data group added")  # Debug
-        except Exception as e:
-            print(f"Error adding IPTC Data group: {e}")  # Debug
-        
-        print("Finished adding test metadata groups.")  # Debug
+        # Add empty placeholder message
+        placeholder_label = QLabel("Select an image to view metadata")
+        placeholder_label.setStyleSheet("""
+            QLabel {
+                color: rgb(120, 120, 120);
+                font-size: 14px;
+                padding: 20px;
+                text-align: center;
+            }
+        """)
+        placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.metadata_layout.addWidget(placeholder_label)
         
         scroll_area.setWidget(self.metadata_widget)
         
         right_layout.addWidget(scroll_area)
         
         parent.addWidget(right_widget)
-        print("Metadata panel setup complete.")  # Debug
+        logger.debug("Metadata panel setup complete.")
     
     def _create_simple_collapsible_group(self, title: str, data: dict) -> QWidget:
         """Create a simple collapsible group widget"""
-        print(f"Creating simple collapsible group: {title}")  # Debug
+        logger.debug(f"Creating simple collapsible group: {title}")
         
         # Calculate colors
         panel_color = (35, 35, 40)
@@ -508,17 +707,17 @@ class LibraryPanel(BasePanel):
         
         # Toggle functionality
         def toggle_content():
-            print(f"Toggle clicked for {title}")  # Debug
+            logger.debug(f"Toggle clicked for {title}")
             if content_widget.isVisible():
                 content_widget.hide()
                 toggle_button.setText("▶")
                 group_widget.setFixedHeight(30)
-                print(f"Collapsed {title}")  # Debug
+                logger.debug(f"Collapsed {title}")
             else:
                 content_widget.show()
                 toggle_button.setText("▼")
                 group_widget.setMaximumHeight(16777215)
-                print(f"Expanded {title}")  # Debug
+                logger.debug(f"Expanded {title}")
         
         toggle_button.mousePressEvent = lambda e: toggle_content()
         
@@ -530,7 +729,7 @@ class LibraryPanel(BasePanel):
         group_layout.addWidget(header_widget)
         group_layout.addWidget(content_widget)
         
-        print(f"Simple collapsible group created: {title}")  # Debug
+        logger.debug(f"Simple collapsible group created: {title}")
         return group_widget
 
 
@@ -588,7 +787,7 @@ class LibraryPanel(BasePanel):
     
     def _on_recursive_toggled(self, checked: bool) -> None:
         """Handle recursive loading checkbox toggle"""
-        print(f"Recursive toggled: {checked}")  # Debug
+        logger.debug(f"Recursive toggled: {checked}")
         self.recursive_loading = checked
         
         # Only reload if there are folders in the tree
@@ -605,10 +804,10 @@ class LibraryPanel(BasePanel):
                     # Clear children and reload
                     current_item.takeChildren()
                     if self.recursive_loading:
-                        print("Loading recursively")  # Debug
+                        logger.debug("Loading recursively")
                         self._load_subdirectories_recursive(folder_path, current_item)
                     else:
-                        print("Loading non-recursively")  # Debug
+                        logger.debug("Loading non-recursively")
                         # Add dummy item for expandability if folder has subdirectories
                         if self._has_subdirectories(folder_path):
                             dummy_item = QTreeWidgetItem(current_item)
@@ -620,19 +819,19 @@ class LibraryPanel(BasePanel):
     
     def _on_folder_expanded(self, item: QTreeWidgetItem) -> None:
         """Handle folder expansion in tree"""
-        print(f"Folder expanded: {item.text(0)}")  # Debug
+        logger.debug(f"Folder expanded: {item.text(0)}")
         
         folder_path_str = item.data(0, Qt.ItemDataRole.UserRole)
         if not folder_path_str:
-            print("No folder path data found")  # Debug
+            logger.debug("No folder path data found")
             return
         
         folder_path = Path(folder_path_str)
         if not folder_path.is_dir():
-            print(f"Folder path is not a directory: {folder_path}")  # Debug
+            logger.debug(f"Folder path is not a directory: {folder_path}")
             return
         
-        print(f"Loading subdirectories for: {folder_path}")  # Debug
+        logger.debug(f"Loading subdirectories for: {folder_path}")
         
         # Remove dummy items (items with no UserRole data)
         removed_count = 0
@@ -642,10 +841,10 @@ class LibraryPanel(BasePanel):
                 item.removeChild(child)
                 removed_count += 1
         
-        print(f"Removed {removed_count} dummy items")  # Debug
+        logger.debug(f"Removed {removed_count} dummy items")
         
         # Load subdirectories (always load on expansion)
-        print("Loading subdirectories on expansion")  # Debug
+        logger.debug("Loading subdirectories on expansion")
         try:
             loaded_count = 0
             for subpath in sorted(folder_path.iterdir()):
@@ -653,9 +852,9 @@ class LibraryPanel(BasePanel):
                     self._add_folder_item(subpath, item)
                     loaded_count += 1
             
-            print(f"Loaded {loaded_count} subdirectories")  # Debug
+            logger.debug(f"Loaded {loaded_count} subdirectories")
         except (PermissionError, OSError) as e:
-            print(f"Error loading subdirectories: {e}")  # Debug
+            logger.error(f"Error loading subdirectories: {e}")
             pass
     
     def _load_subdirectories_recursive(self, path: Path, parent_item: QTreeWidgetItem, max_depth: int = 3, current_depth: int = 0) -> None:
@@ -707,321 +906,262 @@ class LibraryPanel(BasePanel):
             self._load_images_from_folder()
     
     def _load_images_from_folder(self) -> None:
-        """Load images from selected folder"""
+        """Load images from selected folder using thread pool"""
         if not self.current_folder:
             return
         
+        # Cancel any existing loading immediately
+        logger.debug("[LIB][LOAD] Start loading images, cancelling any previous load")
+        self._cancel_loading()
+        self._clear_image_grid()
+        
+        # Start discovery in background thread
+        logger.debug("[LIB][LOAD] Starting discovery for folder: %s", self.current_folder)
+        self.discovery_thread = ImageDiscoveryThread(
+            str(self.current_folder), 
+            self.recursive_loading
+        )
+        
+        # Connect signals
+        self.discovery_thread.discovery_finished.connect(self._on_discovery_finished)
+        
+        # Show progress UI
+        self.is_loading = True
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Discovering images...")
+        self.cancel_button.setVisible(True)
+        
+        # Start discovery thread
+        self.discovery_thread.start()
+
+    def _clear_image_grid(self) -> None:
+        """Clear all thumbnails and reset counters."""
+        self.image_model.clear_images()
         self.image_files.clear()
-        self.image_widgets.clear()
-        
-        # Clear grid layout
-        for i in reversed(range(self.grid_layout.count())):
-            child = self.grid_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
-        
-        # Supported image extensions
-        image_extensions = {
-            '.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif',
-            '.raw', '.cr2', '.nef', '.arw', '.orf', '.rw2', '.dng'
-        }
-        
-        # Load images from current folder and optionally from subfolders
-        def load_images_from_path(path: Path):
-            try:
-                for file_path in sorted(path.iterdir()):
-                    # Skip hidden files
-                    if file_path.name.startswith('.'):
-                        continue
-                    
-                    # Handle directories for recursive loading
-                    if file_path.is_dir():
-                        if self.recursive_loading:
-                            # Recursively load from subfolders
-                            load_images_from_path(file_path)
-                        continue
-                    
-                    # Only process supported image files
-                    if file_path.suffix.lower() in image_extensions:
-                        # Double-check it's actually a file and not a special entry
-                        if file_path.is_file() and file_path.exists():
-                            self._add_image_to_grid(file_path)
-            except PermissionError:
-                pass
-        
-        load_images_from_path(self.current_folder)
-        
-        # Add spacer at bottom to prevent stretching
-        self._add_bottom_spacer()
-        
-        # Update cell sizes after loading images
-        self._update_cell_sizes()
+        self.selected_image = None
+        self.total_images = 0
+        self.processed_images = 0
+        self.active_processors.clear()
     
-    def _add_bottom_spacer(self) -> None:
-        """Add spacer at bottom of grid to prevent stretching"""
-        if not self.image_files:
+    def _cancel_loading(self) -> None:
+        """Cooperatively cancel current loading process"""
+        # Mindig logoljunk, ha a Cancel gombot megnyomták
+        logger.debug("[LIB][CANCEL] Cancel requested (is_loading=%s, active_processors=%s, discovery_thread=%s)",
+                     self.is_loading, len(self.active_processors), bool(self.discovery_thread))
+
+        # Ha semmi nincs folyamatban, nincs mit megszakítani
+        if (not self.is_loading
+                and not self.active_processors
+                and not self.discovery_thread):
+            logger.debug("[LIB][CANCEL] Nothing to cancel, returning")
+            return
+
+        # Jelöljük, hogy a folyamat leállt
+        self.is_loading = False
+
+        # Kérjük meg a discovery threadet, hogy álljon le
+        if self.discovery_thread:
+            self.discovery_thread.cancel()
+
+        # Kérjük meg az összes aktív processzort, hogy álljon le
+        for processor in self.active_processors:
+            processor.signals.cancelled = True
+
+        # Nem építjük újra a thread poolt, csak a queue-t ürítjük
+        self.thread_pool.clear()
+
+        # UI elemek leállítása/elrejtése
+        self.ui_update_timer.stop()
+        self.progress_bar.setVisible(False)
+        self.cancel_button.setVisible(False)
+
+        QApplication.processEvents()
+        logger.debug("[LIB][CANCEL] Cancel handling finished")
+    
+    def _on_discovery_finished(self, image_paths: List[str]) -> None:
+        """Handle image discovery finished"""
+        if not self.is_loading:
+            # Cancelled while discovering
             return
         
-        # Calculate current grid layout
-        rows = (len(self.image_files) + self.grid_columns - 1) // self.grid_columns
+        self.total_images = len(image_paths)
+        logger.debug("[LIB][DISC] Discovery finished: %s images found", self.total_images)
         
-        # Add vertical spacer in the last row to prevent stretching
-        spacer = QWidget()
-        spacer.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding
-        )
-        spacer.setStyleSheet("background-color: transparent;")
+        if self.total_images == 0:
+            self._on_loading_finished()
+            return
         
-        # Add spacer to each column in the last row
-        for col in range(self.grid_columns):
-            self.grid_layout.addWidget(spacer, rows, col)
+        # Update progress bar
+        self.progress_bar.setFormat(f"Processing {self.total_images} images...")
+        
+        # Create batches for parallel processing
+        batch_size = max(10, min(50, self.total_images // 20))  # Smaller batches for smoother flow
+        batches = []
+        
+        for i in range(0, self.total_images, batch_size):
+            batch = image_paths[i:i + batch_size]
+            batches.append(batch)
+        
+        logger.debug("[LIB][DISC] Created %s batches for processing", len(batches))
+        
+        # Process batches in parallel - start all immediately
+        target_size = max(64, int(getattr(self, "current_icon_size", 140)))
+        for i, batch in enumerate(batches):
+            if not self.is_loading:  # Check cancellation before starting each batch
+                break
+                
+            processor = ImageProcessorRunnable(batch, i, target_size=target_size)
+            processor.signals.image_found.connect(self._on_image_found)
+            processor.signals.batch_finished.connect(self._on_batch_finished)
+            
+            self.active_processors.append(processor)
+            self.thread_pool.start(processor)
+        
+        # Force UI update to start showing images immediately
+        QApplication.processEvents()
+        
+        # Start continuous UI updates
+        self.ui_update_timer.start(30)
     
-    def _add_image_to_grid(self, image_path: Path) -> None:
-        """Add image to grid with custom widget for consistent text positioning"""
-        # Calculate icon size based on column count
-        if self.grid_columns <= 2:
-            icon_size = 180
-        elif self.grid_columns <= 4:
-            icon_size = 160
-        elif self.grid_columns <= 6:
-            icon_size = 140
+    def _on_batch_finished(self, batch_id: int):
+        """Handle batch processing finished"""
+        if not self.is_loading:
+            return
+        
+        # Remove from active processors
+        self.active_processors = [p for p in self.active_processors if p.batch_id != batch_id]
+        
+        # Check if all batches are finished
+        if len(self.active_processors) == 0:
+            logger.debug("[LIB][BATCH] All batches finished, calling _on_loading_finished")
+            self._on_loading_finished()
+    
+    def _on_image_found(self, image_path: str, image_name: str, image: QImage) -> None:
+        """Handle image found signal from worker"""
+        # Check if loading was cancelled
+        if not self.is_loading:
+            return
+        
+        logger.debug("[LIB][IMG] Image found: %s", image_name)
+        
+        # Add image to grid (this runs in main thread)
+        logger.debug("[LIB][IMG] Adding image to grid: %s", image_name)
+        image_path_obj = Path(image_path)
+        self._add_image_to_grid(image_path_obj, image)
+        
+        # Update progress
+        self.processed_images += 1
+        if self.total_images > 0:
+            progress = int((self.processed_images / self.total_images) * 100)
+            self.progress_bar.setValue(progress)
+            self.progress_bar.setFormat(f"Processing {self.processed_images}/{self.total_images} images")
+        
+        # Időnként frissítsük a cellaméreteket betöltés közben is, hogy az
+        # aktuális oszlopszám (Columns) már ilyenkor is érvényesüljön.
+        if self.processed_images in (1, self.grid_columns) or self.processed_images % 10 == 0:
+            self._update_cell_sizes()
+        
+        # Force immediate UI update to show images continuously
+        if self.image_list_view:
+            self.image_list_view.viewport().update()
+        QApplication.processEvents()
+        
+        # Additional UI update every 5 images for smoother flow
+        if self.processed_images % 5 == 0:
+            self.ui_update_timer.start(20)  # Trigger UI update
+    
+    def _on_loading_finished(self) -> None:
+        """Handle loading finished signal from thread"""
+        self.is_loading = False
+        self.progress_bar.setVisible(False)
+        self.cancel_button.setVisible(False)
+        
+        # Stop continuous UI updates
+        self.ui_update_timer.stop()
+        
+        # Recompute cell sizes once, now hogy a view és a splitter már a
+        # végleges méreteket használja. Ez segít, hogy az oszlopszám és a
+        # cellaméret összhangban legyen az ablak aktuális szélességével.
+        self._update_cell_sizes()
+        logger.debug("[LIB][DONE] Loading finished. Loaded %s images", len(self.image_files))
+    
+    def _continuous_ui_update(self) -> None:
+        """Continuous UI update for smooth image display"""
+        if self.is_loading and self.image_list_view:
+            self.image_list_view.viewport().update()
+            QApplication.processEvents()
+            if self.is_loading:
+                self.ui_update_timer.start(30)
         else:
-            icon_size = 120
-        
-        # Calculate lighter background color (25% lighter than panel color)
-        panel_color = (35, 35, 40)  # rgb(35, 35, 40)
-        lighter_color = tuple(min(255, int(c + (255 - c) * 0.25)) for c in panel_color)
-        lighter_color_str = f"rgb({lighter_color[0]}, {lighter_color[1]}, {lighter_color[2]})"
-        
-        # Create custom widget for each image
-        image_widget = QWidget()
-        image_widget.setFixedSize(icon_size + 30, icon_size + 30)
-        image_widget.setStyleSheet(f"""
-            QWidget {{
-                border: 1px solid rgb(35, 35, 40);
-                border-radius: 0px;
-                background-color: {lighter_color_str};
-                margin: 0px;
-                padding: 0px;
-            }}
-            QWidget:hover {{
-                border: 1px solid rgb(35, 35, 40);
-                background-color: rgb(55, 55, 60);
-            }}
-        """)
-        
-        # Create selection overlay widget
-        selection_overlay = QWidget(image_widget)
-        selection_overlay.setGeometry(0, 0, icon_size + 30, icon_size + 30)
-        selection_overlay.setStyleSheet("""
-            QWidget {
-                background-color: transparent;
-                border: none;
-            }
-        """)
-        selection_overlay.hide()  # Initially hidden
-        
-        layout = QVBoxLayout(image_widget)
-        layout.setContentsMargins(10, 10, 10, 10)  # 10px margin inside widget
-        layout.setSpacing(0)  # No spacing between elements
-        
-        # Add vertical spacer to center the image
-        layout.addStretch()
-        
-        # Image label in center
-        image_label = QLabel()
-        # Calculate available space for image (cell height minus filename and margins)
-        available_height = (icon_size + 30) - 20 - 10  # Total height - filename height - margins
-        image_size = min(icon_size, available_height)
-        image_label.setMinimumSize(image_size, image_size)
-        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        image_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {lighter_color_str};
-                border: none;
-                border-radius: 0px;
-            }}
-        """)
-        
-        # Try to load thumbnail
-        try:
-            pixmap = QPixmap(str(image_path))
-            if not pixmap.isNull():
-                # Scale to fit while maintaining aspect ratio
-                scaled_pixmap = pixmap.scaled(
-                    image_size - 2,
-                    image_size - 2,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-                image_label.setPixmap(scaled_pixmap)
-            else:
-                # For RAW files, show placeholder
-                image_label.setText("RAW")
-                image_label.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: {lighter_color_str};
-                        border: none;
-                        border-radius: 0px;
-                        color: rgb(180, 180, 180);
-                    }}
-                """)
-        except Exception:
-            # Fallback for unsupported formats
-            image_label.setText("N/A")
-            image_label.setStyleSheet(f"""
-                QLabel {{
-                    background-color: {lighter_color_str};
-                    border: none;
-                    border-radius: 0px;
-                    color: rgb(180, 180, 180);
-                }}
-            """)
-        
-        layout.addWidget(image_label)
-        
-        # Add vertical spacer to center the image
-        layout.addStretch()
-        
-        # Filename label at bottom - use simple text widget to avoid border
-        filename_widget = QWidget()
-        filename_widget.setFixedHeight(20)
-        filename_widget.setStyleSheet("""
-            QWidget {
-                background-color: transparent;
-                border: none;
-                margin: 0px;
-                padding: 0px;
-            }
-        """)
-        
-        # Create layout for filename widget
-        filename_layout = QVBoxLayout(filename_widget)
-        filename_layout.setContentsMargins(0, 0, 0, 0)
-        filename_layout.setSpacing(0)
-        
-        # Create filename label
-        filename_label = QLabel(image_path.name)
-        filename_label.setStyleSheet("""
-            QLabel {
-                color: white;
-                font-size: 12px;
-                background-color: transparent;
-                padding: 2px;
-                font-weight: bold;
-                border: none;
-            }
-        """)
-        filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        filename_label.setWordWrap(True)
-        
-        filename_layout.addWidget(filename_label)
-        
-        layout.addWidget(filename_widget)
-        
-        # Add to grid layout
-        row = (len(self.image_files)) // self.grid_columns
-        col = (len(self.image_files)) % self.grid_columns
-        self.grid_layout.addWidget(image_widget, row, col)
-        
-        # Add to list AFTER adding to grid
+            self.ui_update_timer.stop()
+
+    def _add_image_to_grid(self, image_path: Path, image: Optional[QImage] = None) -> None:
+        """Add image thumbnail to the QListView model."""
+        pixmap = self._create_thumbnail_pixmap(image_path, image)
+        item = self.image_model.add_image(image_path, pixmap)
         self.image_files.append(image_path)
-        
-        # Store widget and overlay for selection
-        self.image_widgets[str(image_path)] = {
-            'widget': image_widget,
-            'overlay': selection_overlay,
-            'filename_widget': filename_widget,
-            'filename_label': filename_label,
-            'image_label': image_label
-        }
-        
-        # Make widget clickable
-        image_widget.mousePressEvent = lambda e: self._on_image_clicked(image_path, image_widget)
-    
-    def _on_image_clicked(self, image_path: Path, widget: QWidget) -> None:
-        """Handle image click with selection highlighting"""
-        print(f"Image clicked: {image_path.name}")  # Debug
+        if len(self.image_files) == 1:
+            self._update_icon_metrics()
+        if self.selected_image == image_path:
+            self._select_item(item)
+
+    def _create_thumbnail_pixmap(self, image_path: Path, image: Optional[QImage]) -> QPixmap:
+        """Create a raw pixmap; final scaling is done by the delegate.
+
+        Fontos: itt NEM készítünk plusz keretet vagy paddinget, csak egy
+        jól használható forrás-pixmapet adunk vissza. A cella méretéhez
+        igazodó skálázás az ImageItemDelegate.paint-ben történik.
+        """
+        if image is not None and not image.isNull():
+            return QPixmap.fromImage(image)
+
+        pixmap = QPixmap(str(image_path))
+        if pixmap.isNull():
+            # Látható placeholder, a delegate a cellamérethez skálázza.
+            placeholder = QPixmap(32, 32)
+            placeholder.fill(Qt.GlobalColor.darkGray)
+            return placeholder
+        return pixmap
+
+    def _on_view_selection_changed(self, selected, deselected) -> None:
+        """React to QListView selection changes."""
+        if not selected.indexes():
+            return
+        index = selected.indexes()[0]
+        path_value = index.data(ImageListModel.PATH_ROLE)
+        if not path_value:
+            return
+        image_path = Path(path_value)
+        if self.selected_image == image_path:
+            return
         self.selected_image = image_path
         self._load_image_metadata(image_path)
-        
-        # Update all widget styles to show selection
-        for path, widgets in self.image_widgets.items():
-            # Update filename label
-            filename_label = widgets['filename_label']
-            if filename_label:
-                if path == image_path:
-                    filename_label.setStyleSheet("""
-                        QLabel {
-                            color: white;
-                            font-size: 12px;
-                            background-color: transparent;
-                            padding: 2px;
-                            font-weight: bold;
-                            text-decoration: underline;
-                            border: none;
-                        }
-                    """)
-                else:
-                    filename_label.setStyleSheet("""
-                        QLabel {
-                            color: white;
-                            font-size: 12px;
-                            background-color: transparent;
-                            padding: 2px;
-                            font-weight: bold;
-                            border: none;
-                        }
-                    """)
-            
-            # Update image label
-            image_label = widgets['image_label']
-            if image_label:
-                if path == image_path:
-                    image_label.setStyleSheet("""
-                        QLabel {
-                            background-color: rgb(0, 122, 255);
-                            border: none;
-                            border-radius: 0px;
-                        }
-                    """)
-                else:
-                    image_label.setStyleSheet("""
-                        QLabel {
-                            background-color: rgb(71, 71, 76);
-                            border: none;
-                            border-radius: 0px;
-                        }
-                    """)
-            
-            # Update widget style
-            if path == image_path:
-                widgets['widget'].setStyleSheet("""
-                    QWidget {
-                        border: 3px solid rgb(0, 122, 255);
-                        border-radius: 0px;
-                        background-color: rgb(0, 122, 255);
-                        margin: 0px;
-                        padding: 0px;
-                    }
-                """)
-                widgets['overlay'].show()
-            else:
-                widgets['widget'].setStyleSheet(f"""
-                    QWidget {{
-                        border: 1px solid rgb(35, 35, 40);
-                        border-radius: 0px;
-                        background-color: rgb(71, 71, 76);
-                        margin: 0px;
-                        padding: 0px;
-                    }}
-                    QWidget:hover {{
-                        border: 1px solid rgb(35, 35, 40);
-                        background-color: rgb(55, 55, 60);
-                    }}
-                """)
-                widgets['overlay'].hide()
+
+    def _select_image(self, image_path: Path) -> None:
+        """Select the given image path in the view."""
+        if not self.image_list_view:
+            return
+        item = self.image_model.get_item(image_path)
+        if not item:
+            self.selected_image = image_path
+            return
+        self._select_item(item)
+
+    def _select_item(self, item) -> None:
+        if not self.image_list_view:
+            return
+        index = self.image_model.indexFromItem(item)
+        if not index.isValid():
+            return
+        from PyQt6.QtCore import QItemSelectionModel
+        selection_model = self.image_list_view.selectionModel()
+        if selection_model:
+            selection_model.setCurrentIndex(index, QItemSelectionModel.ClearAndSelect)
+        self.image_list_view.scrollTo(index, QListView.ScrollHint.PositionAtCenter)
+        path_value = item.data(ImageListModel.PATH_ROLE)
+        if path_value:
+            self.selected_image = Path(path_value)
     
     def _add_metadata_group(self, title: str, data: dict) -> None:
         """Add metadata group to panel using collapsible group box"""
@@ -1205,27 +1345,9 @@ class LibraryPanel(BasePanel):
     def _on_columns_changed(self, value: int) -> None:
         """Handle grid columns change"""
         self.grid_columns = value
-        
-        # Reload all images with new column layout
-        if self.current_folder:
-            current_images = self.image_files.copy()
-            self.image_files.clear()
-            self.image_widgets.clear()
-            
-            # Clear grid layout
-            for i in reversed(range(self.grid_layout.count())):
-                child = self.grid_layout.itemAt(i).widget()
-                if child:
-                    child.setParent(None)
-            
-            # Re-add all images with new layout
-            for image_path in current_images:
-                self.image_files.append(image_path)
-                self._add_image_to_grid(image_path)
-        
-        # Update cell sizes to match new window size
+        # Only need to recompute the view cell sizes; the QListView will
+        # automatically reflow items according to the new column count.
         self._update_cell_sizes()
-        
         self.logger.info(f"Grid columns changed to: {value}")
     
     def _on_resize_event(self, event) -> None:
@@ -1480,285 +1602,78 @@ class LibraryPanel(BasePanel):
     
     def _on_image_clicked(self, image_path: Path, widget: QWidget) -> None:
         """Handle image click with selection highlighting"""
-        self.selected_image = image_path
+        self._select_image(image_path)
         self._load_image_metadata(image_path)
-        
-        # Hide all overlays first
-        for path, widgets in self.image_widgets.items():
-            widgets['overlay'].hide()
-            # Reset styles
-            widgets['widget'].setStyleSheet(f"""
-                QWidget {{
-                    border: 1px solid rgb(35, 35, 40);
-                    border-radius: 0px;
-                    background-color: rgb(71, 71, 76);
-                    margin: 0px;
-                    padding: 0px;
-                }}
-                QWidget:hover {{
-                    border: 1px solid rgb(35, 35, 40);
-                    background-color: rgb(55, 55, 60);
-                }}
-            """)
-            widgets['image_label'].setStyleSheet("""
-                QLabel {
-                    background-color: rgb(71, 71, 76);
-                    border: none;
-                    border-radius: 0px;
-                }
-            """)
-            widgets['filename_label'].setStyleSheet("""
-                QLabel {
-                    color: white;
-                    font-size: 12px;
-                    background-color: transparent;
-                    padding: 2px;
-                    font-weight: bold;
-                }
-            """)
-        
-        # Show selection for clicked image
-        if str(image_path) in self.image_widgets:
-            selected_widgets = self.image_widgets[str(image_path)]
-            
-            # Apply selection styles
-            selected_widgets['widget'].setStyleSheet("""
-                QWidget {
-                    border: 3px solid rgb(0, 122, 255);
-                    border-radius: 0px;
-                    background-color: rgb(0, 122, 255);
-                    margin: 0px;
-                    padding: 0px;
-                }
-            """)
-            selected_widgets['image_label'].setStyleSheet("""
-                QLabel {
-                    background-color: rgb(0, 122, 255);
-                    border: none;
-                    border-radius: 0px;
-                }
-            """)
-            selected_widgets['filename_label'].setStyleSheet("""
-                QLabel {
-                    color: white;
-                    font-size: 12px;
-                    background-color: transparent;
-                    padding: 2px;
-                    font-weight: bold;
-                    text-decoration: underline;
-                }
-            """)
-            
-            # Show overlay
-            selected_widgets['overlay'].setStyleSheet("""
-                QWidget {
-                    background-color: rgba(0, 122, 255, 30);
-                    border: 3px solid rgb(0, 122, 255);
-                    border-radius: 0px;
-                }
-            """)
-            selected_widgets['overlay'].show()
-            selected_widgets['overlay'].raise_()
     
     def _update_cell_sizes(self) -> None:
         """Update cell sizes based on available space"""
-        if not self.current_folder or not self.image_files:
+        if not self.image_list_view:
             return
-        
-        # Get available width for grid (excluding scrollbars)
-        available_width = self.image_grid_container.width() - 40  # Subtract scrollbar margin
+        viewport_rect = self.image_list_view.viewport().contentsRect()
+        available_width = viewport_rect.width()
         if available_width <= 0:
             return
-        
-        # Calculate optimal cell size
-        cell_width = available_width // self.grid_columns
-        cell_height = int(cell_width * 1.2)  # 5:4 aspect ratio for better image display
-        
-        # Minimum cell size to maintain usability
-        min_cell_size = 100
-        cell_width = max(cell_width, min_cell_size)
-        cell_height = max(cell_height, int(min_cell_size * 1.2))
-        
-        # Calculate icon size (fill most of the cell with margins)
-        icon_size = min(cell_width - 22, cell_height - 45)  # Leave 10px margins + 2px border + 20px for filename
-        
-        # Update all existing widgets
-        for image_path, widgets in self.image_widgets.items():
-            # Update widget size
-            widgets['widget'].setFixedSize(cell_width, cell_height)
-            
-            # Update overlay size
-            widgets['overlay'].setGeometry(0, 0, cell_width, cell_height)
-            
-            # Calculate available space for image (cell height minus margins and filename)
-            available_height = cell_height - 42  # 10px top + 10px bottom + 20px filename + 2px padding
-            image_size = min(icon_size, available_height)
-            
-            # Update image label size
-            image_label = widgets['image_label']
-            if image_label:
-                image_label.setMinimumSize(image_size, image_size)
-                image_label.setMaximumSize(image_size, image_size)
-                
-                # Reload and rescale the pixmap
-                try:
-                    pixmap = QPixmap(str(image_path))
-                    if not pixmap.isNull():
-                        # Scale to fit while maintaining aspect ratio
-                        scaled_pixmap = pixmap.scaled(
-                            image_size,
-                            image_size,
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation
-                        )
-                        image_label.setPixmap(scaled_pixmap)
-                except Exception:
-                    pass
-            
-            # Update styles with selection state
-            is_selected = (self.selected_image and str(self.selected_image) == str(image_path))
-            if is_selected:
-                widgets['widget'].setStyleSheet("""
-                    QWidget {
-                        border: 3px solid rgb(0, 122, 255);
-                        border-radius: 0px;
-                        background-color: rgb(0, 122, 255);
-                        margin: 0px;
-                        padding: 0px;
-                    }
-                """)
-                widgets['image_label'].setStyleSheet("""
-                    QLabel {
-                        background-color: rgb(0, 122, 255);
-                        border: none;
-                        border-radius: 0px;
-                    }
-                """)
-                widgets['filename_label'].setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 12px;
-                        background-color: transparent;
-                        padding: 2px;
-                        font-weight: bold;
-                        text-decoration: underline;
-                    }
-                """)
-                widgets['overlay'].show()
-            else:
-                widgets['widget'].setStyleSheet(f"""
-                    QWidget {{
-                        border: 1px solid rgb(35, 35, 40);
-                        border-radius: 0px;
-                        background-color: rgb(71, 71, 76);
-                        margin: 0px;
-                        padding: 0px;
-                    }}
-                    QWidget:hover {{
-                        border: 1px solid rgb(35, 35, 40);
-                        background-color: rgb(55, 55, 60);
-                    }}
-                """)
-                widgets['image_label'].setStyleSheet("""
-                    QLabel {
-                        background-color: rgb(71, 71, 76);
-                        border: none;
-                        border-radius: 0px;
-                    }
-                """)
-                widgets['filename_label'].setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 12px;
-                        background-color: transparent;
-                        padding: 2px;
-                        font-weight: bold;
-                    }
-                """)
-                widgets['overlay'].hide()
-        
-        self.logger.info(f"Updated cell sizes: {cell_width}x{cell_height}, icon: {image_size}x{image_size}")
+        spacing = self.image_list_view.spacing() if hasattr(self.image_list_view, "spacing") else 0
+        columns = max(1, self.grid_columns)
+        # Osszuk el a teljes szélességet a kívánt oszlopszámmal, figyelembe véve
+        # az oszlopok közötti spacinget. Így pontosan annyi oszlop fér ki,
+        # amennyit a spinbox mutat.
+        effective_width = max(0, available_width - max(0, columns - 1) * spacing)
+        # Pixelpontos számolás: a viewport kliens területéből (scrollbar és frame
+        # nélkül) képezzük a cellaszélességet, hogy pontosan N oszlop kiférjen.
+        cell_width = max(effective_width // columns, 50)
+
+        # Thumbnail terület legyen legalább 1:1 (négyzet), plusz alul a fájlnév.
+        icon_padding = 12
+        icon_size = max(80, cell_width - icon_padding)
+
+        filename_height = 26
+        vertical_padding = 10
+        # Minimum 1:1 cella (a kép négyzetes területe a cell_width-hoz igazodik)
+        cell_height = max(icon_size, cell_width) + filename_height + vertical_padding
+
+        self.current_icon_size = icon_size
+        self.logger.debug(
+            "[LIB][SIZE] viewport=%s, columns=%s, spacing=%s, cell_width=%s, icon_size=%s, cell_height=%s",
+            available_width,
+            columns,
+            spacing,
+            cell_width,
+            icon_size,
+            cell_height,
+        )
+        self._update_icon_metrics(column_count=self.grid_columns)
+
+    def _update_icon_metrics(self, column_count: Optional[int] = None) -> None:
+        """Update QListView grid size based on current icon size and column count."""
+        if not self.image_list_view or not self.image_delegate:
+            return
+        columns = column_count or self.grid_columns
+        columns = max(1, columns)
+
+        viewport_rect = self.image_list_view.viewport().contentsRect()
+        available_width = viewport_rect.width()
+        if available_width <= 0:
+            return
+        spacing = self.image_list_view.spacing() if hasattr(self.image_list_view, "spacing") else 0
+        effective_width = max(0, available_width - max(0, columns - 1) * spacing)
+        cell_width = max(effective_width // columns, 50)
+
+        filename_height = 26
+        vertical_padding = 10
+        cell_height = max(self.current_icon_size, cell_width) + filename_height + vertical_padding
+
+        grid_size = QSize(cell_width, cell_height)
+        self.image_list_view.setIconSize(QSize(self.current_icon_size, self.current_icon_size))
+        self.image_list_view.setGridSize(grid_size)
+        self.image_list_view.updateGeometry()
+        logger.debug(
+            "[LIB][GRID] viewport=%s, columns=%s, spacing=%s, cell_width=%s, cell_height=%s, icon=%s",
+            available_width,
+            columns,
+            spacing,
+            cell_width,
+            cell_height,
+            self.current_icon_size,
+        )
     
-    def _update_widget_style(self, widget: QWidget, is_selected: bool = False) -> None:
-        """Update widget styling with selection state"""
-        # Calculate lighter background color (25% lighter than panel color)
-        panel_color = (35, 35, 40)  # rgb(35, 35, 40)
-        lighter_color = tuple(min(255, int(c + (255 - c) * 0.25)) for c in panel_color)
-        lighter_color_str = f"rgb({lighter_color[0]}, {lighter_color[1]}, {lighter_color[2]})"
-        
-        # Update widget style based on selection
-        if is_selected:
-            widget.setStyleSheet(f"""
-                QWidget {{
-                    border: 3px solid rgb(0, 122, 255);
-                    border-radius: 0px;
-                    background-color: rgb(0, 122, 255);
-                    margin: 0px;
-                    padding: 0px;
-                }}
-                QWidget:hover {{
-                    border: 3px solid rgb(0, 122, 255);
-                    background-color: rgb(0, 122, 255);
-                }}
-            """)
-        else:
-            widget.setStyleSheet(f"""
-                QWidget {{
-                    border: 1px solid rgb(35, 35, 40);
-                    border-radius: 0px;
-                    background-color: {lighter_color_str};
-                    margin: 0px;
-                    padding: 0px;
-                }}
-                QWidget:hover {{
-                    border: 1px solid rgb(35, 35, 40);
-                    background-color: rgb(55, 55, 60);
-                }}
-            """)
-        
-        # Update image label style
-        image_label = widget.findChild(QLabel)
-        if image_label:
-            if is_selected:
-                image_label.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: rgb(0, 122, 255);
-                        border: none;
-                        border-radius: 0px;
-                    }}
-                """)
-            else:
-                image_label.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: {lighter_color_str};
-                        border: none;
-                        border-radius: 0px;
-                    }}
-                """)
-        
-        # Update filename label style
-        filename_label = widget.findChild(QLabel, "filename")
-        if filename_label:
-            if is_selected:
-                filename_label.setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 12px;
-                        background-color: transparent;
-                        padding: 2px;
-                        font-weight: bold;
-                        text-decoration: underline;
-                        border: none;
-                    }
-                """)
-            else:
-                filename_label.setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 12px;
-                        background-color: transparent;
-                        padding: 2px;
-                        font-weight: bold;
-                        border: none;
-                    }
-                """)
