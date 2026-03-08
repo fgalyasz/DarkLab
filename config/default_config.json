@@ -2,13 +2,14 @@
   "window": {
     "geometry": null,
     "maximized": false,
-    "current_panel": "library"
+    "current_panel": "import"
   },
   "theme": {
     "name": "dark",
     "accent_color": "#007AFF"
   },
   "panels": {
+    "import": {},
     "library": {
       "date_format": "YYYY.mm.dd. HH:MM:SS"
     },

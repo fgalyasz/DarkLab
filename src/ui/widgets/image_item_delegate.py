@@ -21,14 +21,34 @@ class ImageItemDelegate(QStyledItemDelegate):
         self.selection_color = QColor(0, 122, 255)
         self.text_color = QColor(255, 255, 255)
         self.text_font = QFont("SF Pro Display", 10)
-        self.filename_height = 20
+        self.filename_height = 24
         self.corner_radius = 8
+        self.cell_side = 120
+        self.card_margin = 6
+        self.image_padding = 10
+
+    def set_layout_metrics(
+        self,
+        *,
+        cell_side: int,
+        filename_height: int,
+        card_margin: int,
+        image_padding: int,
+    ) -> None:
+        """Update paint geometry based on the current grid layout settings."""
+        self.cell_side = max(1, cell_side)
+        self.filename_height = max(12, filename_height)
+        self.card_margin = max(0, card_margin)
+        self.image_padding = max(0, image_padding)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
         painter.save()
-        # A paint() mindig az option.rect-et használja. Az item geometriát a
-        # sizeHint() + QListView.gridSize határozza meg.
-        rect = option.rect.adjusted(2, 2, -2, -2)
+        rect = option.rect.adjusted(
+            self.card_margin,
+            self.card_margin,
+            -self.card_margin,
+            -self.card_margin,
+        )
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
         is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         bg_color = self._background_color(is_selected, is_hovered)
@@ -36,18 +56,17 @@ class ImageItemDelegate(QStyledItemDelegate):
         painter.setPen(self.selection_color if is_selected else self.border_color)
         painter.setBrush(bg_color)
         painter.drawRoundedRect(rect, self.corner_radius, self.corner_radius)
+
+        image_area_side = max(1, self.cell_side - (self.image_padding * 2))
+        image_area = QRect(
+            rect.left() + self.image_padding,
+            rect.top() + self.image_padding,
+            image_area_side,
+            image_area_side,
+        )
+
         pixmap: Optional[QPixmap] = index.data(ImageListModel.PIXMAP_ROLE)
         if pixmap:
-            # Képterület: töltse ki szinte az egész cellát, csak alul hagyjunk
-            # sávot a fájlnévnek. Gondoskodjunk róla, hogy a magasság sose
-            # legyen 0 vagy negatív, különben a skálázás eltünteti a képet.
-            image_height = max(rect.height() - self.filename_height - 16, 12)
-            image_area = QRect(
-                rect.left() + 10,
-                rect.top() + 8,
-                rect.width() - 20,
-                image_height,
-            )
             scaled = pixmap.scaled(
                 image_area.size(),
                 Qt.AspectRatioMode.KeepAspectRatio,
@@ -58,9 +77,9 @@ class ImageItemDelegate(QStyledItemDelegate):
         painter.setFont(self.text_font)
         painter.setPen(self.text_color)
         text_rect = QRect(
-            rect.left() + 4,
-            rect.bottom() - self.filename_height - 2,
-            rect.width() - 8,
+            rect.left() + self.image_padding,
+            image_area.bottom() + 2,
+            image_area.width(),
             self.filename_height,
         )
         painter.drawText(

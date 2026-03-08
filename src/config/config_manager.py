@@ -6,14 +6,23 @@ Handles application settings and state persistence
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import ClassVar, Dict, Any, Optional
 from PyQt6.QtCore import QRect
 
 
 class ConfigManager:
     """Manages application configuration and state"""
+
+    _instance: ClassVar[Optional["ConfigManager"]] = None
     
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self):
+        if getattr(self, "_initialized", False):
+            return
         self.logger = logging.getLogger(__name__)
         self.config_file = Path.home() / ".photo_editor" / "config.json"
         # Get project root (3 levels up from this file)
@@ -22,6 +31,7 @@ class ConfigManager:
         self.config_file.parent.mkdir(exist_ok=True)
         self._config: Dict[str, Any] = {}
         self.load_config()
+        self._initialized = True
     
     def load_config(self) -> None:
         """Load configuration from file"""
@@ -60,6 +70,7 @@ class ConfigManager:
     
     def set(self, key: str, value: Any) -> None:
         """Set configuration value"""
+        self.load_config()
         keys = key.split('.')
         config = self._config
         for k in keys[:-1]:
@@ -84,13 +95,14 @@ class ConfigManager:
             "window": {
                 "geometry": None,
                 "maximized": False,
-                "current_panel": "library"
+                "current_panel": "import"
             },
             "theme": {
                 "name": "dark",
                 "accent_color": "#007AFF"
             },
             "panels": {
+                "import": {},
                 "library": {},
                 "develop": {},
                 "print": {},
@@ -122,7 +134,7 @@ class ConfigManager:
     
     def get_current_panel(self) -> str:
         """Get current active panel"""
-        return self.get("window.current_panel", "library")
+        return self.get("window.current_panel", "import")
     
     def set_current_panel(self, panel_name: str) -> None:
         """Set current active panel"""

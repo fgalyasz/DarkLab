@@ -13,7 +13,8 @@ from PyQt6.QtGui import QScreen, QGuiApplication, QFont
 
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
-from src.ui.panels.library_panel import LibraryPanel
+from src.ui.panels.import_panel import ImportPanel
+from src.ui.panels.library_browser_panel import LibraryBrowserPanel
 from src.ui.panels.develop_panel import DevelopPanel
 from src.ui.panels.print_panel import PrintPanel
 from src.ui.panels.slideshow_panel import SlideshowPanel
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow):
         
         # Panel buttons on the right side
         panels = [
+            ("import", "Import"),
             ("library", "Library"),
             ("develop", "Develop"),
             ("print", "Print"),
@@ -111,7 +113,8 @@ class MainWindow(QMainWindow):
     def _setup_panels(self) -> None:
         """Setup all panels"""
         panel_classes = {
-            "library": LibraryPanel,
+            "import": ImportPanel,
+            "library": LibraryBrowserPanel,
             "develop": DevelopPanel,
             "print": PrintPanel,
             "slideshow": SlideshowPanel,
@@ -139,6 +142,15 @@ class MainWindow(QMainWindow):
         
         # Restore current panel
         current_panel = self.config_manager.get_current_panel()
+        if current_panel == "library_import":
+            current_panel = "import"
+        elif (
+            current_panel == "library"
+            and "import" in self.panels
+            and not self.config_manager.get("window.import_panel_migrated", False)
+        ):
+            current_panel = "import"
+            self.config_manager.set("window.import_panel_migrated", True)
         self._switch_to_panel(current_panel)
     
     def _center_window(self) -> None:
