@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import unicodedata
 import xml.etree.ElementTree as ET
+from fractions import Fraction
 from hashlib import sha1
 from pathlib import Path
 from typing import List, Optional
@@ -58,6 +59,8 @@ logger.setLevel(logging.DEBUG)
 
 class ImageProcessorRunnable(QRunnable):
     """Runnable for processing a batch of images"""
+
+    RAW_IMAGE_SUFFIXES = (".cr2", ".cr3", ".nef", ".arw", ".raf", ".orf", ".rw2", ".dng")
     
     def __init__(self, image_paths: List[str], batch_id: int, target_size: int):
         super().__init__()
@@ -65,6 +68,33 @@ class ImageProcessorRunnable(QRunnable):
         self.batch_id = batch_id
         self.target_size = max(32, int(target_size))
         self.signals = ImageProcessorSignals()
+
+    def _load_raw_thumbnail(self, image_path: str) -> QImage:
+        import rawpy
+
+        with rawpy.imread(image_path) as raw_file:
+            rgb_data = raw_file.postprocess(use_camera_wb=True, half_size=True, no_auto_bright=True, output_bps=8)
+        image = QImage(rgb_data.data, rgb_data.shape[1], rgb_data.shape[0], rgb_data.strides[0], QImage.Format.Format_RGB888)
+        return image.copy()
+
+    def _load_qt_thumbnail(self, image_path: str) -> QImage:
+        reader = QImageReader(str(image_path))
+        reader.setAutoTransform(True)
+        original_size = reader.size()
+        if original_size.isValid() and original_size.width() > 0 and original_size.height() > 0:
+            max_side = max(original_size.width(), original_size.height())
+            scale = self.target_size / max_side
+            scaled_size = QSize(max(1, int(original_size.width() * scale)), max(1, int(original_size.height() * scale)))
+            reader.setScaledSize(scaled_size)
+        else:
+            reader.setScaledSize(QSize(self.target_size, self.target_size))
+        return reader.read()
+
+    def _load_thumbnail(self, image_path: str) -> QImage:
+        suffix = Path(image_path).suffix.lower()
+        if suffix in self.RAW_IMAGE_SUFFIXES:
+            return self._load_raw_thumbnail(image_path)
+        return self._load_qt_thumbnail(image_path)
     
     def run(self):
         """Process a batch of images: load files into QImage in worker thread"""
@@ -75,22 +105,10 @@ class ImageProcessorRunnable(QRunnable):
                     logger.debug("[LIB][RUN] Batch %s cancelled before image %s", self.batch_id, index)
                     break
 
-                reader = QImageReader(str(image_path))
-                reader.setAutoTransform(True)
-                original_size = reader.size()
-                if original_size.isValid() and original_size.width() > 0 and original_size.height() > 0:
-                    max_side = max(original_size.width(), original_size.height())
-                    scale = self.target_size / max_side
-                    scaled_size = QSize(
-                        max(1, int(original_size.width() * scale)),
-                        max(1, int(original_size.height() * scale)),
-                    )
-                    reader.setScaledSize(scaled_size)
-                else:
-                    reader.setScaledSize(QSize(self.target_size, self.target_size))
-                image = reader.read()
-                if image.isNull():
-                    logger.debug("[LIB][RUN] Failed to load thumbnail: %s (%s)", image_path, reader.errorString())
+                try:
+                    image = self._load_thumbnail(image_path)
+                except Exception as error:
+                    logger.debug("[LIB][RUN] Failed to load thumbnail: %s (%s)", image_path, error)
                     image = QImage()
 
                 self.signals.image_found.emit(image_path, Path(image_path).name, image)
@@ -120,6 +138,28 @@ class ImageProcessorSignals(QObject):
 
 class ImageDiscoveryThread(QThread):
     """Thread for discovering image files (not loading them)"""
+
+    STANDARD_IMAGE_SUFFIXES = (
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".tiff",
+        ".tif",
+        ".webp",
+    )
+    RAW_IMAGE_SUFFIXES = (
+        ".cr2",
+        ".cr3",
+        ".nef",
+        ".arw",
+        ".raf",
+        ".orf",
+        ".rw2",
+        ".dng",
+    )
+    SUPPORTED_IMAGE_SUFFIXES = STANDARD_IMAGE_SUFFIXES + RAW_IMAGE_SUFFIXES
     
     # Signals
     discovery_finished = pyqtSignal(list)  # List of image paths
@@ -144,6 +184,7 @@ class ImageDiscoveryThread(QThread):
                 image_files = self._find_images_recursive(folder_path)
             else:
                 image_files = self._find_images_non_recursive(folder_path)
+            image_files = self._sort_image_paths(image_files)
             
             print(f"Discovered {len(image_files)} image files")  # Debug
             self.image_files = [str(path) for path in image_files]
@@ -177,6 +218,12 @@ class ImageDiscoveryThread(QThread):
             pass
         
         return image_files
+
+    def _sort_image_paths(self, image_paths: List[Path]) -> List[Path]:
+        return sorted(
+            image_paths,
+            key=lambda path: (path.stem.lower(), path.suffix.lower(), path.name.lower()),
+        )
     
     def _find_images_non_recursive(self, folder_path: Path) -> List[Path]:
         """Find image files in current folder only"""
@@ -195,8 +242,7 @@ class ImageDiscoveryThread(QThread):
     
     def _is_image_file(self, file_path: Path) -> bool:
         """Check if file is an image"""
-        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp'}
-        return file_path.suffix.lower() in image_extensions
+        return file_path.suffix.lower() in self.SUPPORTED_IMAGE_SUFFIXES
 
 
 class CollapsibleGroupBox(QWidget):
@@ -448,9 +494,11 @@ class LibraryPanel(BasePanel):
     GRID_FILENAME_HEIGHT = 24
     GRID_IMAGE_INNER_PADDING = 10
     GRID_LAYOUT_UPDATE_DELAY_MS = 60
+    STANDARD_IMAGE_SUFFIXES = ImageDiscoveryThread.STANDARD_IMAGE_SUFFIXES
+    SUPPORTED_IMAGE_SUFFIXES = ImageDiscoveryThread.SUPPORTED_IMAGE_SUFFIXES
     EXIF_WRITABLE_SUFFIXES = (".jpg", ".jpeg", ".tif", ".tiff", ".webp")
     PNG_WRITABLE_SUFFIXES = (".png",)
-    RAW_WRITABLE_SUFFIXES = (".cr2", ".cr3", ".nef", ".arw", ".raf", ".orf", ".rw2", ".dng")
+    RAW_WRITABLE_SUFFIXES = ImageDiscoveryThread.RAW_IMAGE_SUFFIXES
     EXIF_TAG_IDS = {
         "ImageDescription": 270,
         "Artist": 315,
@@ -2235,6 +2283,8 @@ class LibraryPanel(BasePanel):
             return
 
         image_paths = self._filter_import_candidates(image_paths)
+        ordered_image_paths = [Path(image_path) for image_path in image_paths]
+        self._populate_grid_with_ordered_images(ordered_image_paths)
         
         self.total_images = len(image_paths)
         logger.debug("[LIB][DISC] Discovery finished: %s images found", self.total_images)
@@ -2274,6 +2324,14 @@ class LibraryPanel(BasePanel):
         
         # Start continuous UI updates
         self.ui_update_timer.start(30)
+
+    def _populate_grid_with_ordered_images(self, image_paths: List[Path]) -> None:
+        """Populate the grid with the final sorted order before thumbnails arrive."""
+        self.image_files = list(image_paths)
+        if self.grid_widget:
+            self.grid_widget.set_images(list(image_paths))
+        if self.image_files:
+            self._update_icon_metrics()
     
     def _on_batch_finished(self, batch_id: int):
         """Handle batch processing finished"""
@@ -2351,8 +2409,12 @@ class LibraryPanel(BasePanel):
         """Add image thumbnail to the grid widget."""
         pixmap = self._create_thumbnail_pixmap(image_path, image)
         if self.grid_widget:
-            self.grid_widget.add_image(image_path, pixmap)
-        self.image_files.append(image_path)
+            if image_path in self.grid_widget.images:
+                self.grid_widget.set_thumbnail(image_path, pixmap)
+            else:
+                self.grid_widget.add_image(image_path, pixmap)
+        if image_path not in self.image_files:
+            self.image_files.append(image_path)
         if len(self.image_files) == 1:
             self._update_icon_metrics()
         if self.selected_image == image_path:
@@ -2928,6 +2990,8 @@ class LibraryPanel(BasePanel):
 
     def _load_exif_data(self, image_path: Path) -> dict:
         """Load EXIF data from image file."""
+        if image_path.suffix.lower() in self.RAW_WRITABLE_SUFFIXES:
+            return self._load_raw_exif_data(image_path)
         try:
             from PIL import Image
             from PIL.ExifTags import TAGS, GPSTAGS
@@ -2957,11 +3021,11 @@ class LibraryPanel(BasePanel):
                     "Camera": f"{exif_data.get('Make', 'Unknown')} {exif_data.get('Model', 'Unknown')}".strip() or "Unknown",
                     "Lens": exif_data.get("LensModel", "Unknown"),
                     "ISO": str(exif_data.get("ISOSpeedRatings", "Unknown")),
-                    "Aperture": f"f/{exif_data.get('FNumber', 'Unknown')}" if exif_data.get("FNumber") else "Unknown",
-                    "Shutter Speed": exif_data.get("ExposureTime", "Unknown"),
-                    "Focal Length": f"{exif_data.get('FocalLength', 'Unknown')}mm" if exif_data.get("FocalLength") else "Unknown",
-                    "Flash": "On" if str(exif_data.get("Flash", "0")).isdigit() and int(str(exif_data.get("Flash", "0"))) & 1 else "Off",
-                    "White Balance": exif_data.get("WhiteBalance", "Unknown"),
+                    "Aperture": self._format_aperture_value(exif_data.get("FNumber", "Unknown")),
+                    "Shutter Speed": self._format_shutter_speed_value(exif_data.get("ExposureTime", "Unknown")),
+                    "Focal Length": self._format_focal_length_value(exif_data.get("FocalLength", "Unknown")),
+                    "Flash": "On" if str(exif_data.get("Flash", "0")).isdigit() and int(str(exif_data.get("Flash", "0")) ) & 1 else "Off",
+                    "White Balance": self._format_white_balance_value(exif_data.get("WhiteBalance", "Unknown")),
                     "Date Taken": exif_data.get("DateTime", "Unknown"),
                 }
         except ImportError:
@@ -2970,6 +3034,122 @@ class LibraryPanel(BasePanel):
         except Exception as error:
             logger.error("Error loading EXIF data: %s", error)
             return self._get_fallback_exif_data(image_path)
+
+    def _load_raw_exif_data(self, image_path: Path) -> dict:
+        try:
+            import exifread
+            with image_path.open("rb") as image_file:
+                tags = exifread.process_file(image_file, details=False)
+            return self._map_raw_exif_tags(tags, image_path)
+        except Exception as error:
+            logger.error("Error loading RAW EXIF data: %s", error)
+            return self._get_fallback_exif_data(image_path)
+
+    def _map_raw_exif_tags(self, tags: dict, image_path: Path) -> dict:
+        make_value = self._get_exifread_value(tags, "Image Make")
+        model_value = self._get_exifread_value(tags, "Image Model")
+        camera_value = self._normalize_metadata_text(f"{make_value} {model_value}").strip()
+        return {
+            "Camera": camera_value or "Unknown",
+            "Lens": self._first_non_empty_exifread_value(tags, "EXIF LensModel", "MakerNote LensSpec", "MakerNote LensModel"),
+            "ISO": self._first_non_empty_exifread_value(tags, "EXIF ISOSpeedRatings", "EXIF PhotographicSensitivity"),
+            "Aperture": self._format_aperture_value(self._first_non_empty_exifread_value(tags, "EXIF FNumber", "EXIF ApertureValue")),
+            "Shutter Speed": self._format_shutter_speed_value(self._first_non_empty_exifread_value(tags, "EXIF ExposureTime", "EXIF ShutterSpeedValue")),
+            "Focal Length": self._format_focal_length_value(self._get_exifread_value(tags, "EXIF FocalLength")),
+            "Flash": self._format_flash_value(self._get_exifread_value(tags, "EXIF Flash")),
+            "White Balance": self._format_white_balance_value(self._first_non_empty_exifread_value(tags, "EXIF WhiteBalance", "MakerNote WhiteBalance")),
+            "Date Taken": self._first_non_empty_exifread_value(tags, "EXIF DateTimeOriginal", "Image DateTime") or self._get_fallback_exif_data(image_path)["Date Taken"],
+        }
+
+    def _get_exifread_value(self, tags: dict, tag_name: str) -> str:
+        tag_value = tags.get(tag_name)
+        if tag_value is None:
+            return ""
+        return self._normalize_metadata_text(str(tag_value))
+
+    def _first_non_empty_exifread_value(self, tags: dict, *tag_names: str) -> str:
+        for tag_name in tag_names:
+            tag_value = self._get_exifread_value(tags, tag_name)
+            if tag_value:
+                return tag_value
+        return "Unknown"
+
+    def _format_aperture_value(self, value: str) -> str:
+        if not value or value == "Unknown":
+            return "Unknown"
+        numeric_value = self._parse_fractional_value(value)
+        if numeric_value is not None and numeric_value > 0:
+            return f"f/{numeric_value:.1f}".rstrip("0").rstrip(".")
+        normalized_value = value.lower()
+        if normalized_value.startswith("f/"):
+            return value
+        return f"f/{value}"
+
+    def _format_shutter_speed_value(self, value: str) -> str:
+        if not value or value == "Unknown":
+            return "Unknown"
+        numeric_value = self._parse_fractional_value(value)
+        if numeric_value is None or numeric_value <= 0:
+            return value
+        if numeric_value >= 1:
+            rounded_seconds = round(numeric_value, 1)
+            if rounded_seconds.is_integer():
+                return f"{int(rounded_seconds)} s"
+            return f"{rounded_seconds} s"
+        denominator = max(1, round(1 / numeric_value))
+        return f"1/{denominator} s"
+
+    def _parse_fractional_value(self, value: str) -> Optional[float]:
+        normalized_value = self._normalize_metadata_text(value).strip().lower()
+        if not normalized_value or normalized_value == "unknown":
+            return None
+        normalized_value = normalized_value.removeprefix("f/").removesuffix("mm").removesuffix(" s").strip()
+        try:
+            return float(normalized_value)
+        except ValueError:
+            pass
+        try:
+            return float(Fraction(normalized_value))
+        except (ValueError, ZeroDivisionError):
+            return None
+
+    def _format_focal_length_value(self, value: str) -> str:
+        if not value or value == "Unknown":
+            return "Unknown"
+        numeric_value = self._parse_fractional_value(value)
+        if numeric_value is not None and numeric_value > 0:
+            return f"{int(round(numeric_value))}mm"
+        normalized_value = self._normalize_metadata_text(value).strip()
+        if normalized_value.lower().endswith("mm"):
+            normalized_value = normalized_value[:-2].strip()
+            numeric_value = self._parse_fractional_value(normalized_value)
+            if numeric_value is not None and numeric_value > 0:
+                return f"{int(round(numeric_value))}mm"
+            return "Unknown"
+        return normalized_value
+
+    def _format_flash_value(self, value: str) -> str:
+        if not value:
+            return "Unknown"
+        normalized_value = value.lower()
+        if "fired" in normalized_value or normalized_value == "1":
+            return "On"
+        if "did not fire" in normalized_value or normalized_value == "0":
+            return "Off"
+        return value
+
+    def _format_white_balance_value(self, value: str) -> str:
+        if not value or value == "Unknown":
+            return "Unknown"
+        normalized_value = self._normalize_metadata_text(value).strip().lower()
+        white_balance_map = {
+            "0": "Auto",
+            "1": "Manual",
+            "auto": "Auto",
+            "automatic": "Auto",
+            "manual": "Manual",
+        }
+        return white_balance_map.get(normalized_value, self._normalize_metadata_text(value).strip())
 
     def _get_fallback_exif_data(self, image_path: Path) -> dict:
         """Get fallback EXIF data when Pillow is not available."""
@@ -3017,11 +3197,40 @@ class LibraryPanel(BasePanel):
         suffix = image_path.suffix.lower()
         if suffix in self.RAW_WRITABLE_SUFFIXES:
             iptc_data.update(self._read_xmp_sidecar(image_path))
+            iptc_data.update(self._read_raw_embedded_metadata(image_path))
         elif suffix in self.EXIF_WRITABLE_SUFFIXES:
             iptc_data.update(self._read_exif_editable_metadata(image_path))
         elif suffix in self.PNG_WRITABLE_SUFFIXES:
             iptc_data.update(self._read_png_editable_metadata(image_path))
         return iptc_data
+
+    def _read_raw_embedded_metadata(self, image_path: Path) -> dict[str, str]:
+        try:
+            import exifread
+            with image_path.open("rb") as image_file:
+                tags = exifread.process_file(image_file, details=False)
+        except Exception:
+            return {}
+        return {
+            "Title": self._first_non_empty_metadata_value(self._get_exifread_value(tags, "Image ImageDescription"), self._get_exifread_value(tags, "EXIF UserComment")),
+            "Description": self._get_exifread_value(tags, "EXIF UserComment"),
+            "Keywords": self._get_exifread_value(tags, "Image XPKeywords"),
+            "Creator": self._first_non_empty_metadata_value(self._get_exifread_value(tags, "Image Artist"), self._get_exifread_value(tags, "Image XPAuthor")),
+            "Credit": "",
+            "Source": "",
+            "Copyright": self._get_exifread_value(tags, "Image Copyright"),
+            "City": "",
+            "State": "",
+            "Country": "",
+            "Rating": self._first_non_empty_metadata_value(self._get_exifread_value(tags, "Image Rating"), "0"),
+        }
+
+    def _first_non_empty_metadata_value(self, *values: str) -> str:
+        for value in values:
+            normalized_value = self._normalize_metadata_text(value).strip()
+            if normalized_value:
+                return normalized_value
+        return ""
     
     def _on_image_clicked(self, image_path: Path, widget: QWidget) -> None:
         """Handle image click with selection highlighting"""
