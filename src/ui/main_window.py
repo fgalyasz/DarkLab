@@ -1,5 +1,5 @@
 """
-Main Window for Photo Editor Application
+Main Window for DarkLab Application
 Handles the main UI layout and panel management
 """
 

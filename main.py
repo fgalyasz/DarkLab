@@ -29,9 +29,9 @@ def main():
     logger = logging.getLogger(__name__)
     
     app = QApplication(sys.argv)
-    app.setApplicationName("Photo Editor")
+    app.setApplicationName("DarkLab")
     app.setApplicationVersion("1.0.0")
-    app.setOrganizationName("Photo Editor")
+    app.setOrganizationName("DarkLab")
     
     # Enable high DPI scaling (PyQt6 handles this automatically)
     # app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)

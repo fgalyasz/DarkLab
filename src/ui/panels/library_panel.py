@@ -16,7 +16,7 @@ from fractions import Fraction
 from hashlib import sha1
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem,
@@ -32,6 +32,7 @@ from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QKeySequence, QSho
 
 from src.config.config_manager import ConfigManager
 from src.ui.widgets.grid_image_widget import GridImageWidget
+from src.ui.dialogs import RenamePatternDialog, DestinationSettingsDialog
 from .base_panel import BasePanel
 
 
@@ -448,6 +449,9 @@ class LibraryPanel(BasePanel):
     IMPORT_SETTINGS_KEY = "current"
     IMPORT_PANEL_STATE_KEY = "panel_states"
     RENAME_TEMPLATE_LIST_KEY = "rename_templates"
+    DESTINATION_PRESET_LIST_KEY = "destination_presets"
+    DESTINATION_PRESET_ACTIVE_KEY = "active_destination_preset"
+    DEFAULT_DESTINATION_PRESET_NAME = "Default"
     REJECTED_RATING_VALUE = "-1"
     SAMPLE_FILENAME = "IMG_0001"
     SAMPLE_SEQUENCE = "001"
@@ -483,7 +487,31 @@ class LibraryPanel(BasePanel):
         "State",
         "Country",
         "Rating",
+        "Pick",
+        "Color Label",
     )
+    PICK_OPTIONS = (("Any", "any"), ("Accepted (✓)", "accepted"), ("Rejected (✕)", "rejected"), ("None", "none"))
+    RATING_OPTIONS = (
+        ("Any", "any"),
+        ("★ 5 only", "exact_5"),
+        ("★ 4+", "4"),
+        ("★ 4 only", "exact_4"),
+        ("★ 3+", "3"),
+        ("★ 3 only", "exact_3"),
+        ("★ 2+", "2"),
+        ("★ 2 only", "exact_2"),
+        ("★ 1+", "1"),
+        ("★ 1 only", "exact_1"),
+        ("No stars", "0"),
+    )
+    SORT_OPTIONS = (("None", "none"), ("Rating ↑", "rating_asc"), ("Rating ↓", "rating_desc"))
+    COLOR_OPTIONS = (("Any", "any"), ("None", "none"), ("Red", "red"), ("Orange", "orange"), ("Yellow", "yellow"), ("Green", "green"), ("Blue", "blue"), ("Purple", "purple"))
+    PICK_FIELD = "Pick"
+    COLOR_LABEL_FIELD = "Color Label"
+    RATING_FIELD = "Rating"
+    FILTER_DAYS_MIN = 0
+    FILTER_DAYS_MAX = 36500
+    FILTER_DAYS_DEFAULT = 36500
     GRID_SPACING = 8
     GRID_MIN_SPACING = 4
     GRID_MAX_SPACING_DELTA = 18
@@ -530,6 +558,8 @@ class LibraryPanel(BasePanel):
         "State": "State",
         "Country": "Country",
         "Rating": "Rating",
+        "Pick": "Pick",
+        "Color Label": "ColorLabel",
     }
     FIELD_TO_XMP_PROP = {
         "Title": "dc:title",
@@ -542,6 +572,8 @@ class LibraryPanel(BasePanel):
         "City": "photoshop:City",
         "State": "photoshop:State",
         "Country": "photoshop:Country",
+        "Pick": "xmp:Label",
+        "Color Label": "xmp:ColorLabel",
     }
     XMP_NAMESPACES = {
         "x": "adobe:ns:meta/",
@@ -555,6 +587,7 @@ class LibraryPanel(BasePanel):
         super().__init__("library")
         self.current_folder: Optional[Path] = None
         self.image_files: List[Path] = []
+        self.discovered_image_files: List[Path] = []
         self.selected_image: Optional[Path] = None
         self.selected_images: List[Path] = []
         self.grid_columns = self.DEFAULT_GRID_COLUMNS
@@ -564,14 +597,22 @@ class LibraryPanel(BasePanel):
         self.scroll_area: Optional[QScrollArea] = None
         self.current_icon_size = self.GRID_MIN_CELL_SIZE
         self.metadata_overrides: dict[Path, dict[str, str]] = {}
+        self.image_marker_cache: dict[Path, dict[str, str]] = {}
+        self.thumbnail_cache: dict[Path, QPixmap] = {}
+        self.media_filter_state: dict[str, object] = {
+            "pick": "any",
+            "rating": "any",
+            "color": "any",
+            "days": self.FILTER_DAYS_DEFAULT,
+            "sort_by": "none",
+        }
         self.metadata_widgets = {}  # Store metadata edit widgets
         self.import_panel_widgets: dict[str, QWidget] = {}
         self.import_section_count = 0
         self.preset_combo: Optional[QComboBox] = None
         self.preset_feedback_label: Optional[QLabel] = None
-        self.rename_sample_label: Optional[QLabel] = None
-        self.rename_feedback_label: Optional[QLabel] = None
-        self.rename_tokens_widget: Optional[QWidget] = None
+        self.rename_preset_label: Optional[QLabel] = None
+        self.destination_preset_label: Optional[QLabel] = None
         self._updating_import_ui = False
         self.import_status_label: Optional[QLabel] = None
         self.import_button: Optional[QPushButton] = None
@@ -595,6 +636,7 @@ class LibraryPanel(BasePanel):
         # Limit parallel decodes to avoid massive RAM spikes.
         self.thread_pool.setMaxThreadCount(4)
         self.is_loading = False
+        self._loading_session_id = 0  # Incremented on each new load to ignore stale signals
         self.active_processors = []  # Track active processors
         self.total_images = 0
         self.processed_images = 0
@@ -770,10 +812,11 @@ class LibraryPanel(BasePanel):
         middle_widget = QWidget()
         middle_layout = QVBoxLayout(middle_widget)
         middle_layout.setContentsMargins(0, 0, 0, 0)
-        middle_layout.setSpacing(0)
+        middle_layout.setSpacing(12)
         
-        # Controls
+        # Controls with expanded spacing
         controls_layout = QHBoxLayout()
+        controls_layout.setSpacing(16)  # More space between items
         
         # Grid columns control
         columns_label = QLabel("Columns:")
@@ -792,6 +835,62 @@ class LibraryPanel(BasePanel):
         self.columns_value_label.setMinimumWidth(22)
         controls_layout.addWidget(self.columns_value_label)
         
+        # Add spacing between columns section and filters
+        controls_layout.addSpacing(24)
+
+        # Filter controls - make them expand to fill space
+        self.pick_filter_combo = self._create_marker_combo(self.PICK_OPTIONS)
+        self.pick_filter_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.pick_filter_combo.currentIndexChanged.connect(self._on_media_filter_changed)
+        pick_label = QLabel("Pick:")
+        pick_label.setStyleSheet("color: white;")
+        controls_layout.addWidget(pick_label)
+        controls_layout.addWidget(self.pick_filter_combo, 1)
+
+        controls_layout.addSpacing(12)  # Space between filter groups
+
+        self.rating_filter_combo = self._create_marker_combo(self.RATING_OPTIONS)
+        self.rating_filter_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.rating_filter_combo.currentIndexChanged.connect(self._on_media_filter_changed)
+        stars_label = QLabel("Stars:")
+        stars_label.setStyleSheet("color: white;")
+        controls_layout.addWidget(stars_label)
+        controls_layout.addWidget(self.rating_filter_combo, 1)
+
+        controls_layout.addSpacing(12)  # Space between filter groups
+
+        self.color_filter_combo = self._create_marker_combo(self.COLOR_OPTIONS)
+        self.color_filter_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.color_filter_combo.currentIndexChanged.connect(self._on_media_filter_changed)
+        color_label = QLabel("Color:")
+        color_label.setStyleSheet("color: white;")
+        controls_layout.addWidget(color_label)
+        controls_layout.addWidget(self.color_filter_combo, 1)
+
+        controls_layout.addSpacing(12)  # Space between filter groups
+
+        days_label = QLabel("Days:")
+        days_label.setStyleSheet("color: white;")
+        controls_layout.addWidget(days_label)
+        self.days_back_spin = QSpinBox()
+        self.days_back_spin.setRange(self.FILTER_DAYS_MIN, self.FILTER_DAYS_MAX)
+        self.days_back_spin.setValue(self.FILTER_DAYS_DEFAULT)
+        self.days_back_spin.setFixedWidth(90)
+        self.days_back_spin.valueChanged.connect(self._on_media_filter_changed)
+        controls_layout.addWidget(self.days_back_spin)
+        
+        controls_layout.addSpacing(12)  # Space between filter groups
+
+        # Sort by rating
+        self.sort_combo = self._create_marker_combo(self.SORT_OPTIONS)
+        self.sort_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.sort_combo.currentIndexChanged.connect(self._on_media_filter_changed)
+        sort_label = QLabel("Sort:")
+        sort_label.setStyleSheet("color: white;")
+        controls_layout.addWidget(sort_label)
+        controls_layout.addWidget(self.sort_combo, 1)
+        
+        # Add stretch before progress bar to push everything left
         controls_layout.addStretch()
         
         # Progress bar and cancel button
@@ -857,6 +956,7 @@ class LibraryPanel(BasePanel):
         
         self.grid_widget = GridImageWidget()
         self.grid_widget.selection_changed.connect(self._on_grid_selection_changed)
+        self.grid_widget.marker_changed.connect(self._on_marker_changed)
         self.scroll_area.setWidget(self.grid_widget)
         self.scroll_area.installEventFilter(self)
         
@@ -864,6 +964,24 @@ class LibraryPanel(BasePanel):
         self._queue_grid_layout_update()
 
         parent.addWidget(middle_widget)
+
+    def _create_marker_combo(self, options: tuple[tuple[str, str], ...]) -> QComboBox:
+        combo_box = QComboBox()
+        combo_box.setFixedWidth(120)
+        for display_label, data_value in options:
+            combo_box.addItem(display_label, data_value)
+        return combo_box
+
+    def _on_media_filter_changed(self) -> None:
+        self.media_filter_state["pick"] = self._read_combo_data_setting_from_widget(self.pick_filter_combo)
+        self.media_filter_state["rating"] = self._read_combo_data_setting_from_widget(self.rating_filter_combo)
+        self.media_filter_state["color"] = self._read_combo_data_setting_from_widget(self.color_filter_combo)
+        self.media_filter_state["days"] = int(self.days_back_spin.value()) if hasattr(self, "days_back_spin") else self.FILTER_DAYS_DEFAULT
+        self.media_filter_state["sort_by"] = self._read_combo_data_setting_from_widget(self.sort_combo) if hasattr(self, "sort_combo") else "none"
+        self._apply_media_filters_to_grid()
+
+    def _read_combo_data_setting_from_widget(self, combo_box: Optional[QComboBox]) -> str:
+        return str(combo_box.currentData()) if isinstance(combo_box, QComboBox) else "any"
     
     def _setup_metadata_panel(self, parent: QSplitter) -> None:
         """Setup metadata panel"""
@@ -1193,71 +1311,138 @@ class LibraryPanel(BasePanel):
 
     def _create_file_renaming_widget(self) -> QWidget:
         widget, layout = self._build_group_content_widget()
-        form_layout = QFormLayout()
-        template_combo = QComboBox()
-        template_combo.currentTextChanged.connect(self._on_template_selected)
-        self._style_combo_box(template_combo)
-        template_edit = QLineEdit()
-        template_edit.textChanged.connect(lambda text: self._on_import_setting_changed("template_pattern", text))
-        self._style_line_edit(template_edit)
-        self.rename_sample_label = QLabel("")
-        self.rename_sample_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 11px; border: none;")
-        self.rename_tokens_widget = self._create_rename_tokens_help_widget()
-        self.import_panel_widgets["selected_template"] = template_combo
-        self.import_panel_widgets["template_pattern"] = template_edit
-        form_layout.addRow(self._create_form_label("Template"), template_combo)
-        form_layout.addRow(self._create_form_label("Edit"), template_edit)
-        form_layout.addRow(self._create_form_label("Tokens"), self.rename_tokens_widget)
-        form_layout.addRow(self._create_form_label("Sample"), self.rename_sample_label)
-        layout.addLayout(form_layout)
-        button_layout = QHBoxLayout()
-        create_button = self._create_small_button("Create", self._create_rename_template)
-        save_button = self._create_small_button("Save", self._save_selected_template)
-        rename_button = self._create_small_button("Rename", self._rename_selected_template)
-        delete_button = self._create_small_button("Delete", self._delete_selected_template)
-        button_layout.addWidget(create_button)
-        button_layout.addWidget(save_button)
-        button_layout.addWidget(rename_button)
-        button_layout.addWidget(delete_button)
-        layout.addLayout(button_layout)
-        self.rename_feedback_label = QLabel("")
-        self.rename_feedback_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 11px; border: none;")
-        layout.addWidget(self.rename_feedback_label)
+        
+        # Preset name display
+        preset_layout = QHBoxLayout()
+        preset_layout.addWidget(QLabel("Pattern:"))
+        self.rename_preset_label = QLabel("Original filename")
+        self.rename_preset_label.setStyleSheet("color: white; font-weight: bold;")
+        preset_layout.addWidget(self.rename_preset_label)
+        preset_layout.addStretch()
+        
+        # Edit button
+        edit_button = self._create_small_button("Configure...", self._open_rename_dialog)
+        preset_layout.addWidget(edit_button)
+        
+        layout.addLayout(preset_layout)
         return widget
+
+    def _open_rename_dialog(self) -> None:
+        """Open the rename pattern dialog."""
+        import_config = self._get_import_config()
+        templates = self._get_rename_templates_map(import_config)
+        current_settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
+        current_template = str(current_settings.get("selected_template", "Original filename"))
+        
+        dialog = RenamePatternDialog(
+            self,
+            templates,
+            current_template,
+            self.SAMPLE_FILENAME,
+            self.SAMPLE_SEQUENCE,
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_name, selected_pattern, updated_templates = dialog.get_result()
+            # Save updated templates
+            import_config[self.RENAME_TEMPLATE_LIST_KEY] = updated_templates
+            current_settings["selected_template"] = selected_name
+            current_settings["template_pattern"] = selected_pattern
+            import_config[self.IMPORT_SETTINGS_KEY] = current_settings
+            self._save_import_config(import_config)
+            # Update UI
+            self._update_rename_preset_display()
+            self._update_import_preset_settings()
+
+    def _update_rename_preset_display(self) -> None:
+        """Update the rename preset label."""
+        if self.rename_preset_label:
+            current_settings = self._get_current_import_settings()
+            template_name = str(current_settings.get("selected_template", "Original filename"))
+            self.rename_preset_label.setText(template_name)
 
     def _create_destination_widget(self) -> QWidget:
         widget, layout = self._build_group_content_widget()
-        root_layout = QHBoxLayout()
-        target_root_edit = QLineEdit()
-        target_root_edit.textChanged.connect(lambda text: self._on_import_setting_changed("target_root", text))
-        self._style_line_edit(target_root_edit)
-        browse_button = self._create_small_button("Browse", self._select_target_root)
-        root_layout.addWidget(target_root_edit)
-        root_layout.addWidget(browse_button)
-        form_layout = QFormLayout()
-        organize_combo = QComboBox()
-        for value, label in self.ORGANIZE_OPTIONS:
-            organize_combo.addItem(label, value)
-        organize_combo.currentIndexChanged.connect(lambda _: self._on_combo_setting_changed("organize_mode", organize_combo))
-        self._style_combo_box(organize_combo)
-        date_format_combo = QComboBox()
-        for value, label in self.DATE_FORMAT_OPTIONS:
-            date_format_combo.addItem(label, value)
-        date_format_combo.currentIndexChanged.connect(lambda _: self._on_combo_setting_changed("date_format", date_format_combo))
-        self._style_combo_box(date_format_combo)
-        self.import_panel_widgets["target_root"] = target_root_edit
-        self.import_panel_widgets["organize_mode"] = organize_combo
-        self.import_panel_widgets["date_format"] = date_format_combo
-        delete_checkbox = QCheckBox("Delete imported source files after import")
-        delete_checkbox.setStyleSheet("color: white;")
-        delete_checkbox.toggled.connect(lambda checked: self._on_import_setting_changed("delete_after_import", checked))
-        self.import_panel_widgets["delete_after_import"] = delete_checkbox
-        form_layout.addRow(self._create_form_label("Target root"), root_layout)
-        form_layout.addRow(self._create_form_label("Organize"), organize_combo)
-        form_layout.addRow(self._create_form_label("Date format"), date_format_combo)
-        layout.addLayout(form_layout)
-        layout.addWidget(delete_checkbox)
+        
+        # Preset name display
+        preset_layout = QHBoxLayout()
+        preset_layout.addWidget(QLabel("Preset:"))
+        self.destination_preset_label = QLabel("Default")
+        self.destination_preset_label.setStyleSheet("color: white; font-weight: bold;")
+        preset_layout.addWidget(self.destination_preset_label)
+        preset_layout.addStretch()
+        
+        # Edit button
+        edit_button = self._create_small_button("Configure...", self._open_destination_dialog)
+        preset_layout.addWidget(edit_button)
+        
+        layout.addLayout(preset_layout)
         return widget
+
+    def _open_destination_dialog(self) -> None:
+        """Open the destination settings dialog."""
+        import_config = self._get_import_config()
+        
+        # Get or initialize destination presets
+        destination_presets = import_config.get(self.DESTINATION_PRESET_LIST_KEY)
+        if not isinstance(destination_presets, dict) or not destination_presets:
+            # Initialize with current settings as default
+            current_settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
+            destination_presets = {
+                self.DEFAULT_DESTINATION_PRESET_NAME: {
+                    "target_root": str(current_settings.get("target_root", "")),
+                    "organize_mode": str(current_settings.get("organize_mode", self.ORGANIZE_OPTIONS[0][0])),
+                    "date_format": str(current_settings.get("date_format", self.DATE_FORMAT_OPTIONS[0][0])),
+                    "delete_after_import": bool(current_settings.get("delete_after_import", False)),
+                }
+            }
+            import_config[self.DESTINATION_PRESET_LIST_KEY] = destination_presets
+        
+        active_preset = str(import_config.get(self.DESTINATION_PRESET_ACTIVE_KEY, self.DEFAULT_DESTINATION_PRESET_NAME))
+        if active_preset not in destination_presets:
+            active_preset = self.DEFAULT_DESTINATION_PRESET_NAME
+        
+        dialog = DestinationSettingsDialog(
+            self,
+            destination_presets,
+            active_preset,
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_name, selected_settings, updated_presets = dialog.get_result()
+            # Save updated presets
+            import_config[self.DESTINATION_PRESET_LIST_KEY] = updated_presets
+            import_config[self.DESTINATION_PRESET_ACTIVE_KEY] = selected_name
+            
+            # Update current import settings
+            current_settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
+            current_settings["target_root"] = selected_settings["target_root"]
+            current_settings["organize_mode"] = selected_settings["organize_mode"]
+            current_settings["date_format"] = selected_settings["date_format"]
+            current_settings["delete_after_import"] = selected_settings["delete_after_import"]
+            import_config[self.IMPORT_SETTINGS_KEY] = current_settings
+            
+            self._save_import_config(import_config)
+            # Update UI
+            self._update_destination_preset_display()
+            self._update_import_preset_settings()
+
+    def _update_destination_preset_display(self) -> None:
+        """Update the destination preset label."""
+        if self.destination_preset_label:
+            import_config = self._get_import_config()
+            preset_name = str(import_config.get(self.DESTINATION_PRESET_ACTIVE_KEY, self.DEFAULT_DESTINATION_PRESET_NAME))
+            self.destination_preset_label.setText(preset_name)
+
+    def _update_import_preset_settings(self) -> None:
+        """Update the active import preset with current settings."""
+        preset_name = self._current_preset_name()
+        import_config = self._get_import_config()
+        presets = dict(import_config[self.IMPORT_PRESET_LIST_KEY])
+        if preset_name in presets:
+            presets[preset_name] = self._get_current_import_settings()
+            import_config[self.IMPORT_PRESET_LIST_KEY] = presets
+            self._save_import_config(import_config)
 
     def _create_import_action_bar(self) -> QWidget:
         widget = QWidget()
@@ -1362,26 +1547,17 @@ class LibraryPanel(BasePanel):
         import_config = self._get_import_config()
         current_settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
         preset_names = sorted(import_config[self.IMPORT_PRESET_LIST_KEY].keys())
-        template_names = self._get_rename_template_options(import_config)
         active_preset = str(import_config.get(self.IMPORT_PRESET_ACTIVE_KEY, self.DEFAULT_IMPORT_PRESET_NAME))
         self._updating_import_ui = True
         self.preset_combo.clear()
         self.preset_combo.addItems(preset_names)
         self.preset_combo.setCurrentText(active_preset if active_preset in preset_names else preset_names[0])
-        template_widget = self.import_panel_widgets.get("selected_template")
-        if isinstance(template_widget, QComboBox):
-            template_widget.clear()
-            template_widget.addItems(template_names)
         self._set_checkbox_value("skip_duplicates", bool(current_settings["skip_duplicates"]))
         self._set_checkbox_value("skip_rejected", bool(current_settings["skip_rejected"]))
-        self._set_combo_text_value("selected_template", str(current_settings["selected_template"]))
-        self._set_line_edit_value("template_pattern", str(current_settings["template_pattern"]))
-        self._set_line_edit_value("target_root", str(current_settings["target_root"]))
-        self._set_combo_data_value("organize_mode", str(current_settings["organize_mode"]))
-        self._set_combo_data_value("date_format", str(current_settings["date_format"]))
-        self._set_checkbox_value("delete_after_import", bool(current_settings["delete_after_import"]))
         self._updating_import_ui = False
-        self._update_rename_sample()
+        # Update the preset display labels
+        self._update_rename_preset_display()
+        self._update_destination_preset_display()
 
     def _set_checkbox_value(self, key: str, value: bool) -> None:
         widget = self.import_panel_widgets.get(key)
@@ -1682,14 +1858,10 @@ class LibraryPanel(BasePanel):
         self._updating_import_ui = True
         self._set_checkbox_value("skip_duplicates", bool(selected_settings["skip_duplicates"]))
         self._set_checkbox_value("skip_rejected", bool(selected_settings["skip_rejected"]))
-        self._set_combo_text_value("selected_template", str(selected_settings["selected_template"]))
-        self._set_line_edit_value("template_pattern", str(selected_settings["template_pattern"]))
-        self._set_line_edit_value("target_root", str(selected_settings["target_root"]))
-        self._set_combo_data_value("organize_mode", str(selected_settings["organize_mode"]))
-        self._set_combo_data_value("date_format", str(selected_settings["date_format"]))
-        self._set_checkbox_value("delete_after_import", bool(selected_settings["delete_after_import"]))
         self._updating_import_ui = False
-        self._update_rename_sample()
+        # Update the preset display labels
+        self._update_rename_preset_display()
+        self._update_destination_preset_display()
 
     def _set_import_status(self, message: str) -> None:
         if self.import_status_label is not None:
@@ -1841,372 +2013,60 @@ class LibraryPanel(BasePanel):
         if not selected_dir:
             return
         self._set_line_edit_value("target_root", selected_dir)
-        self._on_import_setting_changed("target_root", selected_dir)
 
     def _update_rename_sample(self) -> None:
-        if not self.rename_sample_label:
-            return
-        settings = self._read_import_settings_from_ui() if self.import_panel_widgets else self._get_current_import_settings()
-        template = str(settings.get("template_pattern", self.RENAME_TEMPLATE_OPTIONS[0]))
-        date_value = self.SAMPLE_CAPTURE_TIME.strftime(str(settings.get("date_format", self.DATE_FORMAT_OPTIONS[0][0])))
-        capture_time_value = self.SAMPLE_CAPTURE_TIME.strftime(self.CAPTURE_TIME_FORMAT)
-        sample_name = template.replace("{date}", date_value)
-        sample_name = sample_name.replace("{capture_time}", capture_time_value)
-        sample_name = sample_name.replace("{filename}", self.SAMPLE_FILENAME)
-        sample_name = self._resolve_sequence_token(sample_name, 1)
-        self.rename_sample_label.setText(sample_name)
+        """Legacy method - no longer used but kept for compatibility."""
+        pass
 
-    def _filter_import_candidates(self, image_paths: List[str]) -> List[str]:
-        settings = self._get_current_import_settings()
-        filtered_paths = list(image_paths)
-        if bool(settings.get("skip_duplicates", True)):
-            filtered_paths = self._remove_possible_duplicates(filtered_paths)
-        if bool(settings.get("skip_rejected", True)):
-            filtered_paths = [path for path in filtered_paths if not self._is_rejected_image(Path(path))]
-        return filtered_paths
+    def _insert_template_token(self, token: str) -> None:
+        """Legacy method - no longer used but kept for compatibility."""
+        pass
 
-    def _remove_possible_duplicates(self, image_paths: List[str]) -> List[str]:
-        unique_paths: List[str] = []
-        seen_fingerprints: set[str] = set()
-        for image_path in image_paths:
-            fingerprint = self._build_duplicate_fingerprint(Path(image_path))
-            if fingerprint in seen_fingerprints:
-                continue
-            seen_fingerprints.add(fingerprint)
-            unique_paths.append(image_path)
-        return unique_paths
+    def _create_rename_tokens_help_widget(self) -> QWidget:
+        """Legacy method - no longer used but kept for compatibility."""
+        return QWidget()
 
-    def _build_duplicate_fingerprint(self, image_path: Path) -> str:
-        try:
-            stat_result = image_path.stat()
-            fingerprint_source = f"{image_path.name.lower()}|{stat_result.st_size}|{int(stat_result.st_mtime)}"
-        except OSError:
-            fingerprint_source = image_path.name.lower()
-        return sha1(fingerprint_source.encode("utf-8")).hexdigest()
+    def _on_template_selected(self, template_value: str) -> None:
+        """Legacy method - no longer used but kept for compatibility."""
+        pass
 
-    def _is_rejected_image(self, image_path: Path) -> bool:
-        try:
-            rating_value = self._read_image_rating(image_path)
-        except Exception as error:
-            logger.debug("Failed to read rating for %s: %s", image_path, error)
-            return False
-        return str(rating_value).strip() == self.REJECTED_RATING_VALUE
+    def _on_combo_setting_changed(self, key: str, combo_box: QComboBox) -> None:
+        """Legacy method - no longer used but kept for compatibility."""
+        pass
 
-    def _read_image_rating(self, image_path: Path) -> str:
-        suffix = image_path.suffix.lower()
-        if suffix in self.RAW_WRITABLE_SUFFIXES:
-            metadata = self._read_xmp_editable_metadata(image_path)
-            return metadata.get("Rating", "0")
-        if suffix in self.PNG_WRITABLE_SUFFIXES:
-            metadata = self._read_png_editable_metadata(image_path)
-            return metadata.get("Rating", "0")
-        if suffix in self.EXIF_WRITABLE_SUFFIXES:
-            metadata = self._read_xmp_editable_metadata(image_path)
-            if metadata.get("Rating"):
-                return metadata.get("Rating", "0")
-        return "0"
-    
-    def _create_simple_collapsible_group(self, title: str, data: dict) -> QWidget:
-        """Create a simple collapsible group widget"""
-        logger.debug(f"Creating simple collapsible group: {title}")
-        
-        # Calculate colors
-        panel_color = (35, 35, 40)
-        lighter_color = tuple(min(255, int(c + (255 - c) * 0.25)) for c in panel_color)
-        lighter_color_str = f"rgb({lighter_color[0]}, {lighter_color[1]}, {lighter_color[2]})"
-        
-        # Field background (15% lighter than group background)
-        field_lighter = tuple(min(255, int(c + (255 - c) * 0.15)) for c in lighter_color)
-        field_lighter_str = f"rgb({field_lighter[0]}, {field_lighter[1]}, {field_lighter[2]})"
-        
-        # Main widget
-        group_widget = QWidget()
-        group_layout = QVBoxLayout(group_widget)
-        group_layout.setContentsMargins(0, 0, 0, 0)
-        group_layout.setSpacing(0)
-        
-        # Header with title and toggle button
-        header_widget = QWidget()
-        header_widget.setFixedHeight(30)
-        header_widget.setStyleSheet(f"""
-            QWidget {{
-                background-color: {lighter_color_str};
-                border: 1px solid rgb(60, 60, 65);
-                border-radius: 5px;
-                border-bottom-left-radius: 0px;
-                border-bottom-right-radius: 0px;
-            }}
-        """)
-        
-        header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(10, 5, 10, 5)
-        
-        # Title label
-        title_label = QLabel(title)
-        title_label.setStyleSheet(f"""
-            QLabel {{
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                background-color: transparent;
-                border: none;
-            }}
-        """)
-        
-        # Toggle button
-        toggle_button = QPushButton("▼")
-        toggle_button.setFixedSize(20, 20)
-        toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        toggle_button.setStyleSheet(f"""
-            QPushButton {{
-                color: white;
-                background-color: {lighter_color_str};
-                border: 1px solid rgb(60, 60, 65);
-                border-radius: 3px;
-                font-size: 10px;
-                font-weight: bold;
-            }}
-        """)
-        
-        # Content widget
-        content_widget = QWidget()
-        content_widget.setStyleSheet(f"""
-            QWidget {{
-                background-color: {lighter_color_str};
-                border: 1px solid rgb(60, 60, 65);
-                border-radius: 5px;
-                border-top-left-radius: 0px;
-                border-top-right-radius: 0px;
-                margin-top: -1px;
-            }}
-        """)
-        
-        content_layout = QFormLayout(content_widget)
-        content_layout.setContentsMargins(10, 5, 10, 10)
-        content_layout.setSpacing(5)
-        
-        # Add data to content
-        for key, value in data.items():
-            widget = QLineEdit(str(value))
-            widget.setStyleSheet(f"""
-                QLineEdit {{
-                    color: white;
-                    background-color: {field_lighter_str};
-                    border: 1px solid rgb(60, 60, 65);
-                    border-radius: 3px;
-                    padding: 3px;
-                    font-size: 12px;
-                }}
-            """)
-            widget.textEdited.connect(lambda text, field_key=key: self._on_metadata_changed(field_key, text))
-            self.metadata_widgets[f"{title}:{key}"] = widget
-            
-            label = QLabel(key + ":")
-            label.setStyleSheet(f"""
-                QLabel {{
-                    color: rgb(180, 180, 180);
-                    font-size: 12px;
-                    background-color: transparent;
-                    border: none;
-                }}
-            """)
-            
-            content_layout.addRow(label, widget)
-        
-        # Toggle functionality
-        def toggle_content():
-            if content_widget.isVisible():
-                content_widget.hide()
-                toggle_button.setText("▶")
-                group_widget.setFixedHeight(30)
-                logger.debug(f"Collapsed {title}")
-            else:
-                content_widget.show()
-                toggle_button.setText("▼")
-                group_widget.setMaximumHeight(16777215)
-                logger.debug(f"Expanded {title}")
-        
-        toggle_button.mousePressEvent = lambda e: toggle_content()
-        
-        # Assemble
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-        header_layout.addWidget(toggle_button)
-        
-        group_layout.addWidget(header_widget)
-        group_layout.addWidget(content_widget)
-        
-        logger.debug(f"Simple collapsible group created: {title}")
-        return group_widget
-
-
-    def _load_folder_structure(self) -> None:
-        """Load folder structure from file system"""
-        for directory_path in self._get_root_directories():
-            self._add_folder_item(directory_path, None)
-    
-    def _add_folder_item(self, path: Path, parent: QTreeWidgetItem = None) -> QTreeWidgetItem:
-        """Add folder item to tree"""
-        if parent is None:
-            item = QTreeWidgetItem(self.folder_tree)
-        else:
-            item = QTreeWidgetItem(parent)
-        
-        item.setText(0, path.name)
-        item.setData(0, Qt.ItemDataRole.UserRole, str(path))
-        item.setIcon(0, QIcon.fromTheme("folder"))
-        
-        # If recursive loading is enabled, load all subdirectories
-        if self.recursive_loading:
-            self._load_subdirectories_recursive(path, item)
-        else:
-            # Add dummy item to show expandable indicator if folder has subdirectories
-            if self._has_subdirectories(path):
-                dummy_item = QTreeWidgetItem(item)
-                dummy_item.setText(0, "")  # Empty text, just for expandability
-                dummy_item.setData(0, Qt.ItemDataRole.UserRole, None)
-        
-        return item
-    
-    def _has_subdirectories(self, path: Path) -> bool:
-        """Check if folder has subdirectories"""
-        try:
-            for subpath in path.iterdir():
-                if subpath.is_dir() and not subpath.name.startswith('.'):
-                    return True
-        except (PermissionError, OSError):
-            pass
-        return False
-    
     def _on_recursive_toggled(self, checked: bool) -> None:
-        """Handle recursive loading checkbox toggle"""
-        logger.debug(f"Recursive toggled: {checked}")
+        """Handle recursive loading checkbox toggle."""
         self.recursive_loading = checked
-        
-        # Only reload if there are folders in the tree
-        if self.folder_tree.topLevelItemCount() > 0:
-            # Get currently selected folder or first folder
-            current_item = self.folder_tree.currentItem()
-            if not current_item and self.folder_tree.topLevelItemCount() > 0:
-                current_item = self.folder_tree.topLevelItem(0)
-            
-            if current_item:
-                # Reload the current folder structure
-                folder_path = Path(current_item.data(0, Qt.ItemDataRole.UserRole))
-                if folder_path and folder_path.is_dir():
-                    # Clear children and reload
-                    current_item.takeChildren()
-                    if self.recursive_loading:
-                        logger.debug("Loading recursively")
-                        self._load_subdirectories_recursive(folder_path, current_item)
-                    else:
-                        logger.debug("Loading non-recursively")
-                        # Add dummy item for expandability if folder has subdirectories
-                        if self._has_subdirectories(folder_path):
-                            dummy_item = QTreeWidgetItem(current_item)
-                            dummy_item.setText(0, "")  # Empty text, just for expandability
-                            dummy_item.setData(0, Qt.ItemDataRole.UserRole, None)
-        else:
-            # If no folders loaded yet, just set the flag for future loads
-            pass
-    
-    def _on_folder_expanded(self, item: QTreeWidgetItem) -> None:
-        """Handle folder expansion in tree"""
-        logger.debug(f"Folder expanded: {item.text(0)}")
-        
-        folder_path_str = item.data(0, Qt.ItemDataRole.UserRole)
-        if not folder_path_str:
-            logger.debug("No folder path data found")
-            return
-        
-        folder_path = Path(folder_path_str)
-        if not folder_path.is_dir():
-            logger.debug(f"Folder path is not a directory: {folder_path}")
-            return
-        
-        logger.debug(f"Loading subdirectories for: {folder_path}")
-        
-        # Remove dummy items (items with no UserRole data)
-        removed_count = 0
-        for i in reversed(range(item.childCount())):
-            child = item.child(i)
-            if child.data(0, Qt.ItemDataRole.UserRole) is None:
-                item.removeChild(child)
-                removed_count += 1
-        
-        logger.debug(f"Removed {removed_count} dummy items")
-        
-        # Load subdirectories (always load on expansion)
-        logger.debug("Loading subdirectories on expansion")
-        try:
-            loaded_count = 0
-            for subpath in sorted(folder_path.iterdir()):
-                if subpath.is_dir() and not subpath.name.startswith('.'):
-                    self._add_folder_item(subpath, item)
-                    loaded_count += 1
-            
-            logger.debug(f"Loaded {loaded_count} subdirectories")
-        except (PermissionError, OSError) as e:
-            logger.error(f"Error loading subdirectories: {e}")
-            pass
-    
-    def _load_subdirectories_recursive(self, path: Path, parent_item: QTreeWidgetItem, max_depth: int = 3, current_depth: int = 0) -> None:
-        """Load subdirectories recursively with depth limit"""
-        if current_depth >= max_depth:
-            return
-        
-        try:
-            subdirs = []
-            for subpath in sorted(path.iterdir()):
-                if subpath.is_dir() and not subpath.name.startswith('.'):
-                    subdirs.append(subpath)
-            
-            # Limit number of subdirectories to prevent performance issues
-            max_subdirs = 50
-            for i, subpath in enumerate(subdirs[:max_subdirs]):
-                # Only add if not already added by expansion
-                already_exists = False
-                for j in range(parent_item.childCount()):
-                    child = parent_item.child(j)
-                    if child.data(0, Qt.ItemDataRole.UserRole) == str(subpath):
-                        already_exists = True
-                        break
-                
-                if not already_exists:
-                    child_item = QTreeWidgetItem(parent_item)
-                    child_item.setText(0, subpath.name)
-                    child_item.setData(0, Qt.ItemDataRole.UserRole, str(subpath))
-                    child_item.setIcon(0, QIcon.fromTheme("folder"))
-                    
-                    # Continue recursion for subdirectories
-                    self._load_subdirectories_recursive(subpath, child_item, max_depth, current_depth + 1)
-                
-                # Add indicator if there are more subdirectories
-                if i == max_subdirs - 1 and len(subdirs) > max_subdirs:
-                    more_item = QTreeWidgetItem(parent_item)
-                    more_item.setText(0, f"... and {len(subdirs) - max_subdirs} more")
-                    more_item.setData(0, Qt.ItemDataRole.UserRole, None)
-                    break
-                    
-        except (PermissionError, OSError):
-            pass
-    
+
     def _on_folder_selected(self, item: QTreeWidgetItem, column: int) -> None:
-        """Handle folder selection"""
-        folder_path = Path(item.data(0, Qt.ItemDataRole.UserRole))
-        if folder_path.is_dir():
-            self.current_folder = folder_path
+        """Handle folder selection from tree."""
+        folder_path = item.data(0, Qt.ItemDataRole.UserRole)
+        if folder_path:
+            self.current_folder = Path(folder_path)
             self._load_images_from_folder()
-    
+
     def _load_images_from_folder(self) -> None:
-        """Load images from selected folder using thread pool"""
+        """Load images from selected folder using thread pool."""
         if not self.current_folder:
             return
         
         # Cancel any existing loading immediately
         logger.debug("[LIB][LOAD] Start loading images, cancelling any previous load")
         self._cancel_loading()
-        self._clear_image_grid()
+        
+        # Clear the grid
+        if self.grid_widget:
+            self.grid_widget.clear()
+        self.image_files = []
+        self.discovered_image_files = []
+        self.selected_image = None
+        self.selected_images = []
+        self.image_marker_cache.clear()
+        self.thumbnail_cache.clear()
+        self.metadata_overrides.clear()
+        self._render_metadata_sections(None)
+        self.total_images = 0
+        self.processed_images = 0
         
         # Start discovery in background thread
         logger.debug("[LIB][LOAD] Starting discovery for folder: %s", self.current_folder)
@@ -2228,427 +2088,273 @@ class LibraryPanel(BasePanel):
         # Start discovery thread
         self.discovery_thread.start()
 
-    def _clear_image_grid(self) -> None:
-        """Clear all thumbnails and reset counters."""
-        if self.grid_widget:
-            self.grid_widget.clear()
-        self.image_files.clear()
-        self.selected_image = None
-        self.selected_images = []
-        self.metadata_overrides.clear()
-        self._render_metadata_sections(None)
-        self.total_images = 0
-        self.processed_images = 0
-        self.active_processors.clear()
-    
-    def _cancel_loading(self) -> None:
-        """Cooperatively cancel current loading process"""
-        # Mindig logoljunk, ha a Cancel gombot megnyomták
-        logger.debug("[LIB][CANCEL] Cancel requested (is_loading=%s, active_processors=%s, discovery_thread=%s)",
-                     self.is_loading, len(self.active_processors), bool(self.discovery_thread))
-
-        # Ha semmi nincs folyamatban, nincs mit megszakítani
-        if (not self.is_loading
-                and not self.active_processors
-                and not self.discovery_thread):
-            logger.debug("[LIB][CANCEL] Nothing to cancel, returning")
-            return
-
-        # Jelöljük, hogy a folyamat leállt
-        self.is_loading = False
-
-        # Kérjük meg a discovery threadet, hogy álljon le
-        if self.discovery_thread:
-            self.discovery_thread.cancel()
-
-        # Kérjük meg az összes aktív processzort, hogy álljon le
-        for processor in self.active_processors:
-            processor.signals.cancelled = True
-
-        # Nem építjük újra a thread poolt, csak a queue-t ürítjük
-        self.thread_pool.clear()
-
-        # UI elemek leállítása/elrejtése
-        self.ui_update_timer.stop()
-        self.progress_bar.setVisible(False)
-        self.cancel_button.setVisible(False)
-
-        QApplication.processEvents()
-        logger.debug("[LIB][CANCEL] Cancel handling finished")
-    
-    def _on_discovery_finished(self, image_paths: List[str]) -> None:
-        """Handle image discovery finished"""
-        if not self.is_loading:
-            # Cancelled while discovering
-            return
-
-        image_paths = self._filter_import_candidates(image_paths)
-        ordered_image_paths = [Path(image_path) for image_path in image_paths]
-        self._populate_grid_with_ordered_images(ordered_image_paths)
+    def _on_discovery_finished(self, image_files: List[Path]) -> None:
+        """Handle discovery thread completion."""
+        logger.debug("[LIB][LOAD] Discovery finished with %d images", len(image_files))
+        self.discovered_image_files = image_files
+        self.image_files = image_files
+        self.total_images = len(image_files)
         
-        self.total_images = len(image_paths)
-        logger.debug("[LIB][DISC] Discovery finished: %s images found", self.total_images)
-        
-        if self.total_images == 0:
-            self._on_loading_finished()
+        if not image_files:
+            self.progress_bar.setVisible(False)
+            self.cancel_button.setVisible(False)
+            self.is_loading = False
             return
         
-        # Update progress bar
-        self.progress_bar.setFormat(f"Processing {self.total_images} images...")
-        
-        # Create batches for parallel processing
-        batch_size = max(10, min(50, self.total_images // 20))  # Smaller batches for smoother flow
-        batches = []
-        
-        for i in range(0, self.total_images, batch_size):
-            batch = image_paths[i:i + batch_size]
-            batches.append(batch)
-        
-        logger.debug("[LIB][DISC] Created %s batches for processing", len(batches))
-        
-        # Process batches in parallel - start all immediately
-        target_size = max(64, int(getattr(self, "current_icon_size", 140)))
-        for i, batch in enumerate(batches):
-            if not self.is_loading:  # Check cancellation before starting each batch
+        # Start thumbnail generation
+        self.progress_bar.setFormat("Generating thumbnails...")
+        self._start_thumbnail_generation()
+
+    def _start_thumbnail_generation(self) -> None:
+        """Start generating thumbnails for discovered images."""
+        # Capture current session ID to ignore stale signals from cancelled loads
+        current_session_id = self._loading_session_id
+        # ImageProcessorRunnable expects (image_paths: List[str], batch_id: int, target_size: int)
+        for batch_id, image_path in enumerate(self.discovered_image_files):
+            if not self.is_loading:
                 break
-                
-            processor = ImageProcessorRunnable(batch, i, target_size=target_size)
-            processor.signals.image_found.connect(self._on_image_found)
-            processor.signals.batch_finished.connect(self._on_batch_finished)
-            
-            self.active_processors.append(processor)
-            self.thread_pool.start(processor)
-        
-        # Force UI update to start showing images immediately
-        QApplication.processEvents()
-        
-        # Start continuous UI updates
-        self.ui_update_timer.start(30)
+            runnable = ImageProcessorRunnable([str(image_path)], batch_id, self.current_icon_size)
+            # Use lambda to capture current session ID
+            runnable.signals.image_found.connect(
+                lambda path, name, img, sid=current_session_id: self._on_image_found(path, name, img, sid)
+            )
+            self.thread_pool.start(runnable)
 
-    def _populate_grid_with_ordered_images(self, image_paths: List[Path]) -> None:
-        """Populate the grid with the final sorted order before thumbnails arrive."""
-        self.image_files = list(image_paths)
-        if self.grid_widget:
-            self.grid_widget.set_images(list(image_paths))
-        if self.image_files:
-            self._update_icon_metrics()
-    
-    def _on_batch_finished(self, batch_id: int):
-        """Handle batch processing finished"""
+    def _on_image_found(self, image_path: str, image_name: str, image: QImage, session_id: int = 0) -> None:
+        """Handle when an image is found during batch processing."""
+        # Ignore signals from old/cancelled loading sessions
+        if session_id != self._loading_session_id:
+            logger.debug("[LIB][LOAD] Ignoring stale signal from session %d (current: %d)", session_id, self._loading_session_id)
+            return
         if not self.is_loading:
             return
+        path = Path(image_path)
+        pixmap = QPixmap.fromImage(image)
+        self.thumbnail_cache[path] = pixmap
+        self.grid_widget.add_image(path, pixmap)
         
-        # Remove from active processors
-        self.active_processors = [p for p in self.active_processors if p.batch_id != batch_id]
-        
-        # Check if all batches are finished
-        if len(self.active_processors) == 0:
-            logger.debug("[LIB][BATCH] All batches finished, calling _on_loading_finished")
-            self._on_loading_finished()
-    
-    def _on_image_found(self, image_path: str, image_name: str, image: QImage) -> None:
-        """Handle image found signal from worker"""
-        # Check if loading was cancelled
-        if not self.is_loading:
-            return
-        
-        logger.debug("[LIB][IMG] Image found: %s", image_name)
-        
-        # Add image to grid (this runs in main thread)
-        logger.debug("[LIB][IMG] Adding image to grid: %s", image_name)
-        image_path_obj = Path(image_path)
-        self._add_image_to_grid(image_path_obj, image)
-        
-        # Update progress
         self.processed_images += 1
         if self.total_images > 0:
             progress = int((self.processed_images / self.total_images) * 100)
             self.progress_bar.setValue(progress)
-            self.progress_bar.setFormat(f"Processing {self.processed_images}/{self.total_images} images")
-        
-        # Időnként frissítsük a cellaméreteket betöltés közben is, hogy az
-        # aktuális oszlopszám (Columns) már ilyenkor is érvényesüljön.
-        if self.processed_images in (1, self.grid_columns) or self.processed_images % 10 == 0:
-            self._update_cell_sizes()
-        
-        # Force immediate UI update to show images continuously
-        if self.grid_widget:
-            self.grid_widget.update()
-        QApplication.processEvents()
-        
-        # Additional UI update every 5 images for smoother flow
-        if self.processed_images % 5 == 0:
-            self.ui_update_timer.start(20)  # Trigger UI update
-    
-    def _on_loading_finished(self) -> None:
-        """Handle loading finished signal from thread"""
-        self.is_loading = False
-        self.progress_bar.setVisible(False)
-        self.cancel_button.setVisible(False)
-        
-        # Stop continuous UI updates
-        self.ui_update_timer.stop()
-        
-        # Recompute cell sizes once, now hogy a view és a splitter már a
-        # végleges méreteket használja. Ez segít, hogy az oszlopszám és a
-        # cellaméret összhangban legyen az ablak aktuális szélességével.
-        self._update_cell_sizes()
-        logger.debug("[LIB][DONE] Loading finished. Loaded %s images", len(self.image_files))
-    
-    def _continuous_ui_update(self) -> None:
-        """Continuous UI update for smooth image display"""
-        if self.is_loading and self.grid_widget:
-            self.grid_widget.update()
-            QApplication.processEvents()
-            if self.is_loading:
-                self.ui_update_timer.start(30)
+            self.progress_bar.setFormat(f"Loading images... ({self.processed_images}/{self.total_images})")
         else:
-            self.ui_update_timer.stop()
-
-    def _add_image_to_grid(self, image_path: Path, image: Optional[QImage] = None) -> None:
-        """Add image thumbnail to the grid widget."""
-        pixmap = self._create_thumbnail_pixmap(image_path, image)
-        if self.grid_widget:
-            if image_path in self.grid_widget.images:
-                self.grid_widget.set_thumbnail(image_path, pixmap)
-            else:
-                self.grid_widget.add_image(image_path, pixmap)
-        if image_path not in self.image_files:
-            self.image_files.append(image_path)
-        if len(self.image_files) == 1:
-            self._update_icon_metrics()
-        if self.selected_image == image_path:
-            self._select_image(image_path)
-    
-    def _create_thumbnail_pixmap(self, image_path: Path, image: Optional[QImage]) -> QPixmap:
-        """Create a raw pixmap; final scaling is done by the delegate.
-
-        Fontos: itt NEM készítünk plusz keretet vagy paddinget, csak egy
-        jól használható forrás-pixmapet adunk vissza. A cella méretéhez
-        igazodó skálázás az ImageItemDelegate.paint-ben történik.
-        """
-        if image is not None and not image.isNull():
-            return QPixmap.fromImage(image)
-
-        pixmap = QPixmap(str(image_path))
-        if pixmap.isNull():
-            # Látható placeholder, a delegate a cellamérethez skálázza.
-            placeholder = QPixmap(32, 32)
-            placeholder.fill(Qt.GlobalColor.darkGray)
-            return placeholder
-        return pixmap
-    
-    def _select_image(self, image_path: Path) -> None:
-        """Select the given image path in the view."""
-        if self.grid_widget:
-            self.grid_widget.select_image(image_path)
-        self.selected_images = [image_path]
-        self.selected_image = image_path
-        self._render_metadata_sections(self.selected_images)
-    
-    def _add_metadata_group(self, title: str, data: dict) -> None:
-        """Add metadata group to panel using collapsible group box"""
-        try:
-            print(f"Adding metadata group: {title}")  # Debug
-            
-            # Create a simple QWidget instead of CollapsibleGroupBox for now
-            group_widget = QWidget()
-            group_layout = QVBoxLayout(group_widget)
-            group_layout.setContentsMargins(0, 0, 0, 0)
-            group_layout.setSpacing(0)
-            
-            # Calculate colors
-            panel_color = (35, 35, 40)
-            lighter_color = tuple(min(255, int(c + (255 - c) * 0.25)) for c in panel_color)
-            lighter_color_str = f"rgb({lighter_color[0]}, {lighter_color[1]}, {lighter_color[2]})"
-            
-            # Field background (15% lighter than group background)
-            field_lighter = tuple(min(255, int(c + (255 - c) * 0.15)) for c in lighter_color)
-            field_lighter_str = f"rgb({field_lighter[0]}, {field_lighter[1]}, {field_lighter[2]})"
-            
-            # Header with title and toggle button
-            header_widget = QWidget()
-            header_widget.setFixedHeight(30)
-            header_widget.setStyleSheet(f"""
-                QWidget {{
-                    background-color: {lighter_color_str};
-                    border: 1px solid rgb(60, 60, 65);
-                    border-radius: 5px;
-                    border-bottom-left-radius: 0px;
-                    border-bottom-right-radius: 0px;
-                }}
-            """)
-            
-            header_layout = QHBoxLayout(header_widget)
-            header_layout.setContentsMargins(10, 5, 10, 5)
-            
-            # Title label
-            title_label = QLabel(title)
-            title_label.setStyleSheet(f"""
-                QLabel {{
-                    color: white;
-                    font-size: 12px;
-                    font-weight: bold;
-                    background-color: transparent;
-                    border: none;
-                }}
-            """)
-            
-            # Toggle button
-            toggle_button = QPushButton("▼")
-            toggle_button.setFixedSize(20, 20)
-            toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            toggle_button.setStyleSheet(f"""
-                QPushButton {{
-                    color: white;
-                    background-color: {lighter_color_str};
-                    border: 1px solid rgb(60, 60, 65);
-                    border-radius: 3px;
-                    font-size: 12px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: rgb(70, 70, 75);
-                    border-color: rgb(80, 80, 85);
-                }}
-                QPushButton:pressed {{
-                    background-color: rgb(80, 80, 85);
-                    border-color: rgb(90, 90, 95);
-                }}
-            """)
-            
-            # Content widget
-            content_widget = QWidget()
-            content_widget.setStyleSheet(f"""
-                QWidget {{
-                    background-color: {lighter_color_str};
-                    border: 1px solid rgb(60, 60, 65);
-                    border-radius: 5px;
-                    border-top-left-radius: 0px;
-                    border-top-right-radius: 0px;
-                    margin-top: -1px;
-                }}
-            """)
-            
-            content_layout = QFormLayout(content_widget)
-            content_layout.setContentsMargins(10, 5, 10, 10)
-            content_layout.setSpacing(5)
-            
-            # Add data to content
-            for key, value in data.items():
-                # Create appropriate widget based on value type
-                if isinstance(value, str) and len(str(value)) > 50:
-                    # Use QTextEdit for long strings
-                    widget = QTextEdit(str(value))
-                    widget.setFixedHeight(60)
-                    widget.textChanged.connect(lambda: self._on_metadata_changed(key, widget.toPlainText()))
-                else:
-                    # Use QLineEdit for shorter values
-                    widget = QLineEdit(str(value))
-                    widget.textChanged.connect(lambda text, k=key: self._on_metadata_changed(k, text))
-                
-                # Style the widget
-                widget.setStyleSheet(f"""
-                    QLineEdit {{
-                        color: white;
-                        background-color: {field_lighter_str};
-                        border: 1px solid rgb(60, 60, 65);
-                        border-radius: 3px;
-                        padding: 3px;
-                        font-size: 12px;
-                    }}
-                    QTextEdit {{
-                        color: white;
-                        background-color: {field_lighter_str};
-                        border: 1px solid rgb(60, 60, 65);
-                        border-radius: 3px;
-                        padding: 3px;
-                        font-size: 12px;
-                    }}
-                """)
-                
-                label = QLabel(key + ":")
-                label.setStyleSheet(f"""
-                    QLabel {{
-                        color: rgb(180, 180, 180);
-                        font-size: 12px;
-                        background-color: transparent;
-                        border: none;
-                    }}
-                """)
-                
-                content_layout.addRow(label, widget)
-            
-            # Toggle functionality
-            def toggle_content():
-                if content_widget.isVisible():
-                    content_widget.hide()
-                    toggle_button.setText("▶")
-                    group_widget.setFixedHeight(30)
-                else:
-                    content_widget.show()
-                    toggle_button.setText("▼")
-                    group_widget.setMaximumHeight(16777215)
-            
-            toggle_button.mousePressEvent = lambda e: toggle_content()
-            
-            # Assemble
-            header_layout.addWidget(title_label)
-            header_layout.addStretch()
-            header_layout.addWidget(toggle_button)
-            
-            group_layout.addWidget(header_widget)
-            group_layout.addWidget(content_widget)
-            
-            self.metadata_layout.addWidget(group_widget)
-            print(f"Added group to layout. Total items in layout: {self.metadata_layout.count()}")  # Debug
-        except Exception as e:
-            print(f"Error adding metadata group: {e}")  # Debug
-    
-    def _format_file_size(self, size_bytes: int) -> str:
-        """Format file size in human readable format"""
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.1f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.1f} TB"
-    
-    def _format_timestamp(self, timestamp: float) -> str:
-        """Format timestamp according to configuration"""
-        date_format = self.config_manager.get("panels.library.date_format", "YYYY.mm.dd. HH:MM:SS")
+            self.progress_bar.setValue(0)
+            self.progress_bar.setFormat(f"Loading images... ({self.processed_images}/?)")
         
-        # Convert custom format to Python strftime format
-        python_format = date_format.replace("YYYY", "%Y").replace("mm", "%m").replace("dd", "%d").replace("HH", "%H").replace("MM", "%M").replace("SS", "%S")
+        if self.processed_images >= self.total_images:
+            self.progress_bar.setVisible(False)
+            self.cancel_button.setVisible(False)
+            self.is_loading = False
+            self._apply_media_filters_to_grid()
+
+    def _apply_media_filters_to_grid(self) -> None:
+        """Apply media filters to the grid based on current filter state."""
+        if not self.grid_widget:
+            return
         
+        # Get current filter values
+        pick_filter = self.pick_filter_combo.currentData()
+        rating_filter = self.rating_filter_combo.currentData()
+        color_filter = self.color_filter_combo.currentData()
+        days_filter = self.days_back_spin.value()
+        sort_by = self.sort_combo.currentData() if hasattr(self, "sort_combo") else "none"
+        
+        # Filter images based on criteria
+        filtered_images = []
+        for image_path in self.image_files:
+            # Ensure image_path is a Path object
+            if isinstance(image_path, str):
+                image_path = Path(image_path)
+            
+            # Get markers for this image
+            markers = self._get_image_markers(image_path)
+            
+            # Check pick filter
+            if pick_filter != "any":
+                pick_value = markers.get("pick", "none")
+                if pick_value != pick_filter:
+                    continue
+            
+            # Check rating filter
+            if rating_filter != "any":
+                try:
+                    rating_value = int(markers.get("rating", "0"))
+                    
+                    if rating_filter == "0":
+                        # "No stars" - only show images with exactly 0 rating
+                        if rating_value != 0:
+                            continue
+                    elif rating_filter.startswith("exact_"):
+                        # Exact match (e.g., "exact_3" for exactly 3 stars)
+                        exact_rating = int(rating_filter.split("_")[1])
+                        if rating_value != exact_rating:
+                            continue
+                    else:
+                        # "★ N+" - show images with rating >= filter value
+                        filter_rating = int(rating_filter)
+                        if rating_value < filter_rating:
+                            continue
+                except ValueError:
+                    continue
+            
+            # Check color filter
+            if color_filter != "any":
+                color_value = markers.get("color", "none")
+                if color_value != color_filter:
+                    continue
+            
+            # Check days filter
+            if days_filter > 0:
+                try:
+                    import time
+                    file_mtime = image_path.stat().st_mtime
+                    days_old = (time.time() - file_mtime) / (24 * 3600)
+                    if days_old > days_filter:
+                        continue
+                except (OSError, IOError):
+                    pass
+            
+            filtered_images.append(image_path)
+        
+        # Apply sorting if requested
+        if sort_by != "none":
+            reverse_sort = sort_by == "rating_desc"
+            filtered_images.sort(
+                key=lambda path: int(self._get_image_markers(path).get("rating", "0")),
+                reverse=reverse_sort
+            )
+        
+        # Save current selection before updating grid
+        saved_selection = list(self.grid_widget.selected_images) if self.grid_widget else []
+        
+        # Update grid with filtered images
+        self.grid_widget.set_images(filtered_images)
+        
+        # Restore selection for images that are still visible
+        if saved_selection:
+            restored_selection = [path for path in saved_selection if path in filtered_images]
+            if restored_selection:
+                self.grid_widget.set_selected_images(restored_selection)
+        
+        # Restore thumbnails for filtered images
+        for image_path in filtered_images:
+            if image_path in self.thumbnail_cache:
+                self.grid_widget.set_thumbnail(image_path, self.thumbnail_cache[image_path])
+        
+        # Refresh markers for visible images
+        self._refresh_grid_markers()
+
+    def _get_image_markers(self, image_path: Path) -> dict[str, str]:
+        """Get cached markers for an image, loading from IPTC if not cached."""
+        if image_path in self.image_marker_cache:
+            return self.image_marker_cache[image_path]
+        
+        # Load IPTC data
         try:
-            return datetime.fromtimestamp(timestamp).strftime(python_format)
-        except (ValueError, OSError):
-            return str(timestamp)
-    
+            iptc_data = self._load_iptc_data(image_path)
+            markers = {
+                "pick": iptc_data.get("Pick", "none"),
+                "rating": iptc_data.get("Rating", "0"),
+                "color": iptc_data.get("Color Label", "none"),
+            }
+        except Exception:
+            markers = {"pick": "none", "rating": "0", "color": "none"}
+        
+        self.image_marker_cache[image_path] = markers
+        return markers
+
+    def _refresh_grid_markers(self) -> None:
+        """Refresh markers in the grid widget."""
+        if not self.grid_widget:
+            return
+        
+        # Collect all markers into a single dict
+        all_markers: dict[Path, dict[str, str]] = {}
+        for image_path in self.image_files:
+            if isinstance(image_path, str):
+                image_path = Path(image_path)
+            markers = self._get_image_markers(image_path)
+            all_markers[image_path] = markers
+        
+        self.grid_widget.set_image_markers(all_markers)
+
+    def _get_image_markers(self, image_path: Path) -> dict[str, str]:
+        """Get cached markers for an image, loading from IPTC if not cached."""
+        if image_path in self.image_marker_cache:
+            return self.image_marker_cache[image_path]
+        
+        # Load IPTC data
+        try:
+            iptc_data = self._load_iptc_data(image_path)
+            markers = {
+                "pick": iptc_data.get("Pick", "none"),
+                "rating": iptc_data.get("Rating", "0"),
+                "color": iptc_data.get("Color Label", "none"),
+            }
+        except Exception:
+            markers = {"pick": "none", "rating": "0", "color": "none"}
+        
+        self.image_marker_cache[image_path] = markers
+        return markers
+
+    def _refresh_grid_markers(self) -> None:
+        """Refresh markers in the grid widget."""
+        if not self.grid_widget:
+            return
+        
+        # Collect all markers into a single dict
+        all_markers: dict[Path, dict[str, str]] = {}
+        for image_path in self.image_files:
+            if isinstance(image_path, str):
+                image_path = Path(image_path)
+            markers = self._get_image_markers(image_path)
+            all_markers[image_path] = markers
+        
+        self.grid_widget.set_image_markers(all_markers)
+
+
+    def _on_folder_expanded(self, item: QTreeWidgetItem) -> None:
+        """Handle folder expansion - populate children if needed."""
+        folder_path = item.data(0, Qt.ItemDataRole.UserRole)
+        if not folder_path:
+            return
+        path = Path(folder_path)
+        if not path.exists():
+            return
+        # Clear existing children and repopulate
+        item.takeChildren()
+        try:
+            for child_path in sorted(path.iterdir()):
+                if child_path.is_dir() and not child_path.name.startswith("."):
+                    child_item = QTreeWidgetItem()
+                    child_item.setText(0, child_path.name)
+                    child_item.setData(0, Qt.ItemDataRole.UserRole, str(child_path))
+                    # Add dummy child to show expand arrow
+                    child_item.addChild(QTreeWidgetItem())
+                    item.addChild(child_item)
+        except PermissionError:
+            pass
+
     def _on_columns_changed(self, value: int) -> None:
-        """Handle grid columns change"""
+        """Handle grid columns slider change."""
         self.grid_columns = value
-        if hasattr(self, "columns_value_label"):
+        if hasattr(self, "columns_value_label") and self.columns_value_label:
             self.columns_value_label.setText(str(value))
-        self._queue_grid_layout_update()
-        self.logger.info("Grid columns changed to: %s", value)
+        self._apply_grid_layout()
 
-    def _on_splitter_moved(self, pos: int, index: int) -> None:
-        """Handle splitter moved event"""
-        self._queue_grid_layout_update()
-
-    def _load_image_metadata(self, image_path: Path) -> None:
-        """Load and display image metadata with editable fields"""
-        print(f"Loading metadata for: {image_path.name}")
-        self._render_metadata_sections([image_path])
-        print(f"Metadata loaded for: {image_path.name}")
-
-    def _clear_metadata_layout(self) -> None:
-        while self.metadata_layout.count() > self.import_section_count:
-            item = self.metadata_layout.takeAt(self.import_section_count)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
+    def _load_folder_structure(self) -> None:
+        """Load the folder tree structure with root directories."""
+        root_directories = self._get_root_directories()
+        for directory_path in root_directories:
+            if not directory_path.exists():
+                continue
+            item = QTreeWidgetItem()
+            item.setText(0, directory_path.name or str(directory_path))
+            item.setData(0, Qt.ItemDataRole.UserRole, str(directory_path))
+            # Add dummy child to show expand arrow
+            item.addChild(QTreeWidgetItem())
+            self.folder_tree.addTopLevelItem(item)
 
     def _build_empty_metadata(self, field_names: tuple[str, ...]) -> dict[str, str]:
         return {field_name: "" for field_name in field_names}
@@ -2727,6 +2433,30 @@ class LibraryPanel(BasePanel):
         self.selected_image = self.selected_images[0] if len(self.selected_images) == 1 else None
         self._render_metadata_sections(self.selected_images if self.selected_images else None)
     
+    def _on_marker_changed(self, image_path: Path, marker_type: str, value: str) -> None:
+        """Handle marker change from grid widget context menu."""
+        logger.debug("Marker changed for %s: %s = %s", image_path.name, marker_type, value)
+        
+        # Update cache
+        if image_path in self.image_marker_cache:
+            self.image_marker_cache[image_path][marker_type] = value
+        
+        # Map marker_type to IPTC field name
+        field_map = {
+            "pick": self.PICK_FIELD,
+            "rating": self.RATING_FIELD,
+            "color": self.COLOR_LABEL_FIELD,
+        }
+        field_name = field_map.get(marker_type)
+        if field_name:
+            # Save to file
+            self._save_metadata_to_file(image_path, field_name, value)
+        
+        # Refresh display
+        self._refresh_grid_markers()
+        # Re-apply filters in case the change affects visibility
+        self._apply_media_filters_to_grid()
+    
     def _on_metadata_changed(self, key: str, value: str) -> None:
         """Handle metadata field change."""
         if not self.selected_images:
@@ -2736,6 +2466,11 @@ class LibraryPanel(BasePanel):
             image_override = self.metadata_overrides.setdefault(image_path, {})
             image_override[key] = normalized_value
             self.logger.info("Metadata changed for %s: %s = %s", image_path.name, key, normalized_value)
+            if image_path in self.image_marker_cache and key in {self.PICK_FIELD, self.RATING_FIELD, self.COLOR_LABEL_FIELD}:
+                self.image_marker_cache.pop(image_path, None)
+        if key in {self.PICK_FIELD, self.RATING_FIELD, self.COLOR_LABEL_FIELD}:
+            self._refresh_grid_markers()
+            self._apply_media_filters_to_grid()
 
     def _save_metadata_to_file(self, image_path: Path, key: str, value: str) -> None:
         suffix = image_path.suffix.lower()
@@ -2825,25 +2560,32 @@ class LibraryPanel(BasePanel):
         return self._normalize_metadata_text(value)
 
     def _read_exif_editable_metadata(self, image_path: Path) -> dict[str, str]:
-        from PIL import Image
+        from PIL import Image, UnidentifiedImageError
 
-        with Image.open(image_path) as image:
-            exif = image.getexif()
-            title_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPTitle"], ""))
-            description_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPComment"], exif.get(self.EXIF_TAG_IDS["ImageDescription"], "")))
-            keywords_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPKeywords"], ""))
-            creator_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPAuthor"], exif.get(self.EXIF_TAG_IDS["Artist"], "")))
-            subject_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPSubject"], ""))
-            copyright_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["Copyright"], ""))
-            return {
-                "Title": title_value,
-                "Description": description_value,
-                "Keywords": keywords_value,
-                "Creator": creator_value,
-                "Credit": subject_value,
-                "Source": subject_value,
-                "Copyright": copyright_value,
-            }
+        try:
+            with Image.open(image_path) as image:
+                exif = image.getexif()
+                title_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPTitle"], ""))
+                description_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPComment"], exif.get(self.EXIF_TAG_IDS["ImageDescription"], "")))
+                keywords_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPKeywords"], ""))
+                creator_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPAuthor"], exif.get(self.EXIF_TAG_IDS["Artist"], "")))
+                subject_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["XPSubject"], ""))
+                copyright_value = self._decode_exif_value(exif.get(self.EXIF_TAG_IDS["Copyright"], ""))
+                return {
+                    "Title": title_value,
+                    "Description": description_value,
+                    "Keywords": keywords_value,
+                    "Creator": creator_value,
+                    "Credit": subject_value,
+                    "Source": subject_value,
+                    "Copyright": copyright_value,
+                }
+        except UnidentifiedImageError:
+            logger.warning("Cannot identify image file: %s", image_path)
+            return {"Title": "", "Description": "", "Keywords": "", "Creator": "", "Credit": "", "Source": "", "Copyright": ""}
+        except Exception as error:
+            logger.error("Error reading EXIF metadata from %s: %s", image_path, error)
+            return {"Title": "", "Description": "", "Keywords": "", "Creator": "", "Credit": "", "Source": "", "Copyright": ""}
 
     def _read_png_editable_metadata(self, image_path: Path) -> dict[str, str]:
         from PIL import Image
@@ -2862,6 +2604,8 @@ class LibraryPanel(BasePanel):
                 "State": self._normalize_metadata_text(image_info.get("State", "")),
                 "Country": self._normalize_metadata_text(image_info.get("Country", "")),
                 "Rating": self._normalize_metadata_text(image_info.get("Rating", "0")),
+                "Pick": self._normalize_metadata_text(image_info.get("Pick", "none")),
+                "Color Label": self._normalize_metadata_text(image_info.get("ColorLabel", "none")),
             }
 
     def _write_xmp_sidecar(self, image_path: Path, key: str, value: str) -> None:
@@ -2955,6 +2699,8 @@ class LibraryPanel(BasePanel):
                 "City": self._extract_xmp_attr(description, "photoshop:City"),
                 "State": self._extract_xmp_attr(description, "photoshop:State"),
                 "Country": self._extract_xmp_attr(description, "photoshop:Country"),
+                "Pick": self._extract_xmp_attr(description, "xmp:Label"),
+                "Color Label": self._extract_xmp_attr(description, "xmp:ColorLabel"),
             }
         except Exception as error:
             logger.error("Failed to read XMP sidecar for %s: %s", image_path, error)
@@ -3193,6 +2939,8 @@ class LibraryPanel(BasePanel):
             "State": "",
             "Country": "",
             "Rating": "0",
+            "Pick": "none",
+            "Color Label": "none",
         }
         suffix = image_path.suffix.lower()
         if suffix in self.RAW_WRITABLE_SUFFIXES:
@@ -3200,8 +2948,10 @@ class LibraryPanel(BasePanel):
             iptc_data.update(self._read_raw_embedded_metadata(image_path))
         elif suffix in self.EXIF_WRITABLE_SUFFIXES:
             iptc_data.update(self._read_exif_editable_metadata(image_path))
+            iptc_data.update(self._read_xmp_sidecar(image_path))
         elif suffix in self.PNG_WRITABLE_SUFFIXES:
             iptc_data.update(self._read_png_editable_metadata(image_path))
+            iptc_data.update(self._read_xmp_sidecar(image_path))
         return iptc_data
 
     def _read_raw_embedded_metadata(self, image_path: Path) -> dict[str, str]:
@@ -3223,6 +2973,8 @@ class LibraryPanel(BasePanel):
             "State": "",
             "Country": "",
             "Rating": self._first_non_empty_metadata_value(self._get_exifread_value(tags, "Image Rating"), "0"),
+            "Pick": "none",
+            "Color Label": "none",
         }
 
     def _first_non_empty_metadata_value(self, *values: str) -> str:
@@ -3354,4 +3106,103 @@ class LibraryPanel(BasePanel):
         )
         
         self.current_icon_size = max(1, cell_side - (self.GRID_IMAGE_INNER_PADDING * 2))
-    
+
+    def _cancel_loading(self) -> None:
+        """Cancel the current image loading operation."""
+        logger.debug("[LIB][LOAD] Cancelling loading operation")
+        self.is_loading = False
+        self._loading_session_id += 1  # Increment session ID to ignore old signals
+        if hasattr(self, "discovery_thread") and self.discovery_thread is not None:
+            self.discovery_thread.requestInterruption()
+            self.discovery_thread.wait(1000)
+        self._cancel_thread_pool()
+        self.progress_bar.setVisible(False)
+        self.cancel_button.setVisible(False)
+        self.is_loading = False
+
+    def _cancel_thread_pool(self) -> None:
+        """Cancel all pending thread pool tasks and wait for running ones."""
+        self.thread_pool.clear()
+        # Wait for running tasks to finish (with timeout)
+        self.thread_pool.waitForDone(2000)
+
+    def _clear_metadata_layout(self) -> None:
+        """Clear all metadata sections from the layout."""
+        if hasattr(self, "metadata_layout") and self.metadata_layout:
+            while self.metadata_layout.count() > 0:
+                item = self.metadata_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+    def _create_simple_collapsible_group(self, title: str, fields: dict[str, str]) -> QWidget:
+        """Create a simple collapsible group for metadata display."""
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(4)
+        
+        # Header with title
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(8, 4, 8, 4)
+        title_label = QLabel(title)
+        title_label.setStyleSheet("color: white; font-weight: bold; font-size: 12px;")
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        group_layout.addWidget(header_widget)
+        
+        # Content with fields
+        content_widget = QWidget()
+        content_layout = QFormLayout(content_widget)
+        content_layout.setContentsMargins(12, 4, 12, 8)
+        content_layout.setSpacing(4)
+        content_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        content_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        
+        for field_name, field_value in fields.items():
+            label = QLabel(field_name + ":")
+            label.setStyleSheet("color: rgb(180, 180, 180); font-size: 11px;")
+            value_label = QLabel(str(field_value) if field_value else "-")
+            value_label.setStyleSheet("color: white; font-size: 11px;")
+            value_label.setWordWrap(True)
+            content_layout.addRow(label, value_label)
+            self.metadata_widgets[field_name] = value_label
+        
+        group_layout.addWidget(content_widget)
+        group_widget.setStyleSheet("background-color: rgb(40, 40, 45); border-radius: 4px;")
+        return group_widget
+
+    def _on_splitter_moved(self, pos: int, index: int) -> None:
+        """Handle splitter movement - can be used to save panel sizes."""
+        pass
+
+    def _continuous_ui_update(self) -> None:
+        """Continuous UI update handler for progress and status updates."""
+        if not self.is_loading:
+            return
+        # Update progress bar if discovery thread is running
+        if hasattr(self, "discovery_thread") and self.discovery_thread is not None:
+            if self.discovery_thread.isRunning():
+                discovered = len(getattr(self.discovery_thread, "image_files", []))
+                if discovered > 0:
+                    self.progress_bar.setFormat(f"Discovering images... ({discovered} found)")
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human readable form."""
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        elif size_bytes < 1024 * 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
+        else:
+            return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+    def _format_timestamp(self, timestamp: float) -> str:
+        """Format Unix timestamp to readable date string."""
+        from datetime import datetime
+        try:
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, OSError):
+            return "Unknown"

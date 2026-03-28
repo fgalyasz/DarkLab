@@ -1,4 +1,4 @@
-# Photo Editor - Lightroom Classic Alternative
+# DarkLab - Lightroom Classic Alternative
 
 A modern, cross-platform photo editing application built with Python and PyQt6.
 
