@@ -134,7 +134,7 @@ class ConfigManager:
     
     def get_current_panel(self) -> str:
         """Get current active panel"""
-        return self.get("window.current_panel", "import")
+        return self.get("window.current_panel", "library")
     
     def set_current_panel(self, panel_name: str) -> None:
         """Set current active panel"""

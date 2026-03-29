@@ -5,20 +5,21 @@ Handles the main UI layout and panel management
 
 import logging
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QToolBar, QStackedWidget, QFrame, QLabel, QSizePolicy
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QToolBar, QStackedWidget, QFrame, QLabel, QSizePolicy,
+    QMenuBar, QMenu
 )
 from PyQt6.QtCore import Qt, QRect, QTimer
-from PyQt6.QtGui import QScreen, QGuiApplication, QFont
+from PyQt6.QtGui import QScreen, QGuiApplication, QFont, QKeySequence, QShortcut
 
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
-from src.ui.panels.import_panel import ImportPanel
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
 from src.ui.panels.develop_panel import DevelopPanel
 from src.ui.panels.print_panel import PrintPanel
 from src.ui.panels.slideshow_panel import SlideshowPanel
 from src.ui.panels.website_panel import WebsitePanel
+from src.ui.dialogs import ImportDialog
 
 
 class MainWindow(QMainWindow):
@@ -52,23 +53,47 @@ class MainWindow(QMainWindow):
     
     def _setup_ui(self) -> None:
         """Setup the main UI layout"""
+        # Setup menu bar
+        self._setup_menu_bar()
+
         # Central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
+
         # Main layout
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # Toolbar
         self._setup_toolbar()
         main_layout.addWidget(self.toolbar)
-        
+
         # Panel container
         self.panel_container = QStackedWidget()
         self.panel_container.setStyleSheet(StyleSheet.PANEL)
         main_layout.addWidget(self.panel_container)
+
+    def _setup_menu_bar(self) -> None:
+        """Setup the menu bar with File menu"""
+        menu_bar = QMenuBar()
+        self.setMenuBar(menu_bar)
+
+        # File menu
+        file_menu = QMenu("&File", self)
+        menu_bar.addMenu(file_menu)
+
+        # Import action
+        import_action = file_menu.addAction("&Import...")
+        import_action.setShortcut(QKeySequence("Ctrl+Shift+I"))
+        import_action.triggered.connect(self._open_import_dialog)
+
+        file_menu.addSeparator()
+
+        # Exit action
+        exit_action = file_menu.addAction("E&xit")
+        exit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        exit_action.triggered.connect(self.close)
     
     def _setup_toolbar(self) -> None:
         """Setup the toolbar with title and panel navigation buttons"""
@@ -94,9 +119,8 @@ class MainWindow(QMainWindow):
         )
         self.toolbar.addWidget(spacer)
         
-        # Panel buttons on the right side
+        # Panel buttons on the right side (Import removed, Library first)
         panels = [
-            ("import", "Import"),
             ("library", "Library"),
             ("develop", "Develop"),
             ("print", "Print"),
@@ -111,16 +135,15 @@ class MainWindow(QMainWindow):
             self.toolbar_buttons[panel_id] = button
     
     def _setup_panels(self) -> None:
-        """Setup all panels"""
+        """Setup all panels (Import removed - now a dialog)"""
         panel_classes = {
-            "import": ImportPanel,
             "library": LibraryBrowserPanel,
             "develop": DevelopPanel,
             "print": PrintPanel,
             "slideshow": SlideshowPanel,
             "website": WebsitePanel
         }
-        
+
         for panel_id, panel_class in panel_classes.items():
             panel = panel_class()
             self.panels[panel_id] = panel
@@ -139,19 +162,15 @@ class MainWindow(QMainWindow):
         # Restore maximized state
         if self.config_manager.get("window.maximized", False):
             self.showMaximized()
-        
-        # Restore current panel
+
+        # Library is now the default panel
         current_panel = self.config_manager.get_current_panel()
-        if current_panel == "library_import":
-            current_panel = "import"
-        elif (
-            current_panel == "library"
-            and "import" in self.panels
-            and not self.config_manager.get("window.import_panel_migrated", False)
-        ):
-            current_panel = "import"
-            self.config_manager.set("window.import_panel_migrated", True)
+        if current_panel not in self.panels:
+            current_panel = "library"
         self._switch_to_panel(current_panel)
+
+        # Setup keyboard shortcut for Import dialog (Cmd+I on Mac, Ctrl+I elsewhere)
+        self._setup_import_shortcut()
     
     def _center_window(self) -> None:
         """Center window on screen and set to 80% of screen size"""
@@ -160,11 +179,23 @@ class MainWindow(QMainWindow):
             screen_geometry = screen.availableGeometry()
             width = int(screen_geometry.width() * 0.8)
             height = int(screen_geometry.height() * 0.8)
-            
+
             x = (screen_geometry.width() - width) // 2
             y = (screen_geometry.height() - height) // 2
-            
+
             self.setGeometry(x, y, width, height)
+
+    def _setup_import_shortcut(self) -> None:
+        """Setup keyboard shortcut for Import dialog"""
+        # Use Ctrl+Shift+I on all platforms (PyQt handles Cmd+Shift on Mac automatically)
+        shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+        shortcut.activated.connect(self._open_import_dialog)
+
+    def _open_import_dialog(self) -> None:
+        """Open the Import dialog"""
+        dialog = ImportDialog(self)
+        dialog.exec()
+        self.logger.info("Import dialog closed")
     
     def _switch_to_panel(self, panel_id: str) -> None:
         """Switch to specified panel"""

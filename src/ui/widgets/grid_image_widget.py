@@ -111,6 +111,7 @@ class GridImageWidget(QWidget):
         total_height = rows * self.cell_height + (rows - 1) * self.spacing
         
         self.setMinimumSize(total_width, total_height)
+        # Do not set maximum size - let the layout handle it
     
     def _get_cell_rect(self, index: int) -> QRect:
         """Get the rectangle for a cell at given index."""
