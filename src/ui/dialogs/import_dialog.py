@@ -31,6 +31,11 @@ from PyQt6.QtWidgets import (
 from src.config.config_manager import ConfigManager
 from src.ui.widgets.grid_image_widget import GridImageWidget
 from src.ui.dialogs import RenamePatternDialog, DestinationSettingsDialog
+from src.ui.dialogs.iptc_preset_dialog import IPTCPresetDialog
+from src.models.iptc_data import (
+    IPTCData, IPTCPreset, get_default_iptc_preset, 
+    apply_iptc_to_image, read_iptc_from_image, merge_iptc_data
+)
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +280,11 @@ class ImportDialog(QDialog):
     SAMPLE_CAPTURE_TIME = datetime(2026, 3, 8, 12, 34, 56)
     CAPTURE_TIME_FORMAT = "%y%m%d_%H%M%S"
 
+    # IPTC constants
+    IPTC_PRESET_LIST_KEY = "iptc_presets"
+    IPTC_PRESET_ACTIVE_KEY = "active_iptc_preset"
+    DEFAULT_IPTC_PRESET_NAME = "Default"
+
     # Filter constants
     PICK_OPTIONS = (("Any", "any"), ("Accepted (✓)", "accepted"), ("Rejected (✕)", "rejected"), ("None", "none"))
     RATING_OPTIONS = (
@@ -331,6 +341,18 @@ class ImportDialog(QDialog):
         self.preset_feedback_label: Optional[QLabel] = None
         self.rename_preset_label: Optional[QLabel] = None
         self.destination_preset_label: Optional[QLabel] = None
+        self.iptc_preset_label: Optional[QLabel] = None
+        # IPTC field widgets
+        self.iptc_creator_input: Optional[QLineEdit] = None
+        self.iptc_copyright_input: Optional[QLineEdit] = None
+        self.iptc_credit_input: Optional[QLineEdit] = None
+        self.iptc_source_input: Optional[QLineEdit] = None
+        self.iptc_keywords_input: Optional[QTextEdit] = None
+        # Track existing values from images (with asterisks)
+        self._iptc_existing_data: dict[str, str] = {}  # field -> value with asterisk
+        self._iptc_original_keywords: set[str] = set()  # original keywords from images
+        self._iptc_removed_keywords: set[str] = set()  # keywords marked for removal
+        self._iptc_removed_fields: set[str] = set()  # single fields marked for removal
         self._updating_import_ui = False
         self.import_status_label: Optional[QLabel] = None
         self.import_button: Optional[QPushButton] = None
@@ -1196,6 +1218,9 @@ class ImportDialog(QDialog):
         """Handle grid selection change"""
         self.selected_images = list(image_paths)
         self.import_status_label.setText(f"Selected {len(self.selected_images)} of {len(self.image_files)} images")
+        
+        # Update IPTC fields from selected images
+        self._update_iptc_fields_from_selection()
 
     def _on_marker_changed(self, image_path: Path, marker_type: str, value: str) -> None:
         """Handle marker change from grid"""
@@ -1221,6 +1246,7 @@ class ImportDialog(QDialog):
         self._add_import_group("file_handling", "File Handling", self._create_file_handling_widget(), parent_layout)
         self._add_import_group("file_renaming", "File Renaming", self._create_file_renaming_widget(), parent_layout)
         self._add_import_group("destination", "Destination", self._create_destination_widget(), parent_layout)
+        self._add_import_group("iptc", "IPTC Metadata", self._create_iptc_widget(), parent_layout)
         parent_layout.addStretch()
 
     def _add_import_group(self, panel_key: str, title: str, content_widget: QWidget, parent_layout: QVBoxLayout) -> None:
@@ -1361,6 +1387,219 @@ class ImportDialog(QDialog):
 
         return widget
 
+    def _create_iptc_widget(self) -> QWidget:
+        """Create IPTC metadata widget with all fields and smart asterisk handling"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
+
+        # Preset selector row
+        preset_layout = QHBoxLayout()
+        preset_layout.addWidget(QLabel("Preset:"))
+        self.iptc_preset_label = QLabel("Default")
+        self.iptc_preset_label.setStyleSheet("color: white; font-weight: bold;")
+        preset_layout.addWidget(self.iptc_preset_label)
+        preset_layout.addStretch()
+
+        edit_button = self._create_small_button("Configure...", self._open_iptc_dialog)
+        preset_layout.addWidget(edit_button)
+
+        layout.addLayout(preset_layout)
+
+        # Help text for asterisk behavior
+        help_label = QLabel("* = existing in images (delete to remove, keep to preserve)")
+        help_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 10px;")
+        layout.addWidget(help_label)
+
+        # Creator field
+        creator_layout = QHBoxLayout()
+        creator_layout.addWidget(QLabel("Creator:"))
+        self.iptc_creator_input = QLineEdit()
+        self.iptc_creator_input.setPlaceholderText("Photographer name")
+        self.iptc_creator_input.textEdited.connect(self._on_iptc_field_changed)
+        creator_layout.addWidget(self.iptc_creator_input)
+        layout.addLayout(creator_layout)
+
+        # Copyright field
+        copyright_layout = QHBoxLayout()
+        copyright_layout.addWidget(QLabel("Copyright:"))
+        self.iptc_copyright_input = QLineEdit()
+        self.iptc_copyright_input.setPlaceholderText("Copyright notice")
+        self.iptc_copyright_input.textEdited.connect(self._on_iptc_field_changed)
+        copyright_layout.addWidget(self.iptc_copyright_input)
+        layout.addLayout(copyright_layout)
+
+        # Credit field
+        credit_layout = QHBoxLayout()
+        credit_layout.addWidget(QLabel("Credit:"))
+        self.iptc_credit_input = QLineEdit()
+        self.iptc_credit_input.setPlaceholderText("Credit line")
+        self.iptc_credit_input.textEdited.connect(self._on_iptc_field_changed)
+        credit_layout.addWidget(self.iptc_credit_input)
+        layout.addLayout(credit_layout)
+
+        # Source field
+        source_layout = QHBoxLayout()
+        source_layout.addWidget(QLabel("Source:"))
+        self.iptc_source_input = QLineEdit()
+        self.iptc_source_input.setPlaceholderText("Source")
+        self.iptc_source_input.textEdited.connect(self._on_iptc_field_changed)
+        source_layout.addWidget(self.iptc_source_input)
+        layout.addLayout(source_layout)
+
+        # Keywords text area
+        keywords_label = QLabel("Keywords (one per line, * = existing):")
+        layout.addWidget(keywords_label)
+
+        self.iptc_keywords_input = QTextEdit()
+        self.iptc_keywords_input.setMaximumHeight(100)
+        self.iptc_keywords_input.setPlaceholderText("Enter keywords, one per line...\nExisting keywords will be marked with *")
+        self.iptc_keywords_input.textChanged.connect(self._on_iptc_keywords_changed)
+        layout.addWidget(self.iptc_keywords_input)
+
+        return widget
+
+    def _on_iptc_field_changed(self) -> None:
+        """Handle IPTC field change - track removed asterisk-marked fields"""
+        sender = self.sender()
+        if isinstance(sender, QLineEdit):
+            text = sender.text()
+            field_map = {
+                self.iptc_creator_input: "creator",
+                self.iptc_copyright_input: "copyright",
+                self.iptc_credit_input: "credit",
+                self.iptc_source_input: "source",
+            }
+            field_name = field_map.get(sender)
+            if field_name:
+                # Check if this field had an asterisk-marked value that was cleared
+                if field_name in self._iptc_existing_data:
+                    if not text:  # Field was cleared -> mark as removed
+                        self._iptc_removed_fields.add(field_name)
+                    elif not text.startswith("*"):  # User typed new value without asterisk
+                        self._iptc_removed_fields.discard(field_name)  # User is overriding, not removing
+
+            # If user starts typing and field has asterisk-marked value, clear it
+            if text.startswith("*") and len(text) > 1 and not text[1:].startswith("*"):
+                # User is editing an asterisk-marked field - remove the asterisk
+                sender.setText(text[1:])
+
+    def _on_iptc_keywords_changed(self) -> None:
+        """Handle IPTC keywords change - track removed asterisk-marked keywords"""
+        if self._updating_import_ui:
+            return
+
+        # Get current keywords from text field
+        current_text = self.iptc_keywords_input.toPlainText() if self.iptc_keywords_input else ""
+        current_keywords = {kw.strip() for kw in current_text.split("\n") if kw.strip()}
+
+        # Find asterisk-marked keywords that were removed
+        removed_asterisk_keywords = set()
+        for orig_kw in self._iptc_original_keywords:
+            asterisk_kw = f"*{orig_kw}"
+            # If original was in the list but asterisk version is not in current
+            if asterisk_kw not in current_keywords and orig_kw not in current_keywords:
+                removed_asterisk_keywords.add(orig_kw)
+
+        self._iptc_removed_keywords = removed_asterisk_keywords
+
+        # Save to settings
+        import_config = self._get_import_config()
+        current_settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
+        current_settings["iptc_keywords"] = current_text
+        import_config[self.IMPORT_SETTINGS_KEY] = current_settings
+        self._save_import_config(import_config)
+
+    def _get_iptc_data_from_ui(self) -> IPTCData:
+        """Get IPTC data from UI fields, stripping asterisks"""
+        def strip_asterisk(text: str) -> str:
+            return text[1:] if text.startswith("*") else text
+
+        # Get keywords, handling asterisks
+        keywords_text = self.iptc_keywords_input.toPlainText() if self.iptc_keywords_input else ""
+        keywords = []
+        for kw in keywords_text.split("\n"):
+            kw = kw.strip()
+            if kw:
+                # Strip asterisk if present
+                keywords.append(strip_asterisk(kw))
+
+        return IPTCData(
+            creator=strip_asterisk(self.iptc_creator_input.text()) if self.iptc_creator_input else "",
+            copyright=strip_asterisk(self.iptc_copyright_input.text()) if self.iptc_copyright_input else "",
+            credit=strip_asterisk(self.iptc_credit_input.text()) if self.iptc_credit_input else "",
+            source=strip_asterisk(self.iptc_source_input.text()) if self.iptc_source_input else "",
+            keywords=keywords,
+        )
+
+    def _update_iptc_fields_from_selection(self) -> None:
+        """Update IPTC fields when image selection changes - read from selected images"""
+        if not self.selected_images or len(self.selected_images) == 0:
+            # No selection - clear existing data tracking
+            self._iptc_existing_data = {}
+            self._iptc_original_keywords = set()
+            self._iptc_removed_keywords = set()
+            return
+
+        # Read IPTC data from all selected images
+        all_keywords: set[str] = set()
+        creator_values: set[str] = set()
+        copyright_values: set[str] = set()
+        credit_values: set[str] = set()
+        source_values: set[str] = set()
+
+        for image_path in self.selected_images:
+            iptc_data = read_iptc_from_image(image_path)
+            if iptc_data.creator:
+                creator_values.add(iptc_data.creator)
+            if iptc_data.copyright:
+                copyright_values.add(iptc_data.copyright)
+            if iptc_data.credit:
+                credit_values.add(iptc_data.credit)
+            if iptc_data.source:
+                source_values.add(iptc_data.source)
+            all_keywords.update(iptc_data.keywords)
+
+        self._updating_import_ui = True
+
+        # Update fields with asterisk-prefixed values if they exist in images
+        # If all images have the same value, show it with asterisk
+        # If values differ or are empty, leave field empty
+
+        if len(creator_values) == 1:
+            creator = creator_values.pop()
+            if self.iptc_creator_input:
+                self.iptc_creator_input.setText(f"*{creator}")
+                self._iptc_existing_data["creator"] = creator
+
+        if len(copyright_values) == 1:
+            copyright = copyright_values.pop()
+            if self.iptc_copyright_input:
+                self.iptc_copyright_input.setText(f"*{copyright}")
+                self._iptc_existing_data["copyright"] = copyright
+
+        if len(credit_values) == 1:
+            credit = credit_values.pop()
+            if self.iptc_credit_input:
+                self.iptc_credit_input.setText(f"*{credit}")
+                self._iptc_existing_data["credit"] = credit
+
+        if len(source_values) == 1:
+            source = source_values.pop()
+            if self.iptc_source_input:
+                self.iptc_source_input.setText(f"*{source}")
+                self._iptc_existing_data["source"] = source
+
+        # Update keywords with asterisk prefix
+        if all_keywords and self.iptc_keywords_input:
+            asterisk_keywords = [f"*{kw}" for kw in sorted(all_keywords)]
+            self.iptc_keywords_input.setPlainText("\n".join(asterisk_keywords))
+            self._iptc_original_keywords = all_keywords.copy()
+            self._iptc_removed_keywords = set()
+
+        self._updating_import_ui = False
+
     def _create_small_button(self, text: str, handler) -> QPushButton:
         """Create a small styled button"""
         button = QPushButton(text)
@@ -1483,6 +1722,12 @@ class ImportDialog(QDialog):
         self._updating_import_ui = False
         self._update_rename_preset_display()
         self._update_destination_preset_display()
+        self._update_iptc_preset_display()
+
+        # Load IPTC keywords from settings
+        iptc_keywords = str(current_settings.get("iptc_keywords", ""))
+        if self.iptc_keywords_input:
+            self.iptc_keywords_input.setPlainText(iptc_keywords)
 
     def _on_import_setting_changed(self, key: str, value: object) -> None:
         """Handle import setting change"""
@@ -1666,6 +1911,17 @@ class ImportDialog(QDialog):
 
         self._update_rename_preset_display()
         self._update_destination_preset_display()
+        self._update_iptc_preset_display()
+
+        # Restore IPTC keywords from preset
+        iptc_keywords = str(selected_settings.get("iptc_keywords", ""))
+        if self.iptc_keywords_input:
+            self.iptc_keywords_input.setPlainText(iptc_keywords)
+
+        # Restore IPTC preset name
+        iptc_preset_name = str(selected_settings.get("iptc_preset_name", self.DEFAULT_IPTC_PRESET_NAME))
+        import_config[self.IPTC_PRESET_ACTIVE_KEY] = iptc_preset_name
+        self._save_import_config(import_config)
 
     def _make_unique_preset_name(self, base_name: str, excluded_name: str = "") -> str:
         """Make unique preset name"""
@@ -1719,6 +1975,10 @@ class ImportDialog(QDialog):
         sort_by = str(self.sort_combo.currentData()) if self.sort_combo else "none"
         recursive_loading = bool(self.recursive_checkbox.isChecked()) if self.recursive_checkbox else True
 
+        # IPTC settings
+        iptc_keywords = self.iptc_keywords_input.toPlainText() if self.iptc_keywords_input else ""
+        iptc_preset_name = str(import_config.get(self.IPTC_PRESET_ACTIVE_KEY, self.DEFAULT_IPTC_PRESET_NAME))
+
         return {
             # File handling
             "skip_duplicates": skip_duplicates_widget.isChecked() if isinstance(skip_duplicates_widget, QCheckBox) else True,
@@ -1739,6 +1999,9 @@ class ImportDialog(QDialog):
             "days_back": days_back,
             "sort_by": sort_by,
             "recursive_loading": recursive_loading,
+            # IPTC settings
+            "iptc_preset_name": iptc_preset_name,
+            "iptc_keywords": iptc_keywords,
         }
 
     def _update_rename_preset_display(self) -> None:
@@ -1826,6 +2089,53 @@ class ImportDialog(QDialog):
             self._save_import_config(import_config)
             self._update_destination_preset_display()
 
+    def _open_iptc_dialog(self) -> None:
+        """Open the IPTC preset dialog"""
+        import_config = self._get_import_config()
+
+        # Get or initialize IPTC presets
+        iptc_presets = import_config.get(self.IPTC_PRESET_LIST_KEY)
+        if not isinstance(iptc_presets, dict) or not iptc_presets:
+            default_preset = get_default_iptc_preset()
+            iptc_presets = {default_preset.name: default_preset.to_dict()}
+            import_config[self.IPTC_PRESET_LIST_KEY] = iptc_presets
+
+        active_preset = str(import_config.get(self.IPTC_PRESET_ACTIVE_KEY, self.DEFAULT_IPTC_PRESET_NAME))
+        if active_preset not in iptc_presets:
+            active_preset = self.DEFAULT_IPTC_PRESET_NAME
+
+        # Convert dict to IPTCPreset objects
+        preset_objects = {}
+        for name, data in iptc_presets.items():
+            if isinstance(data, dict):
+                preset_objects[name] = IPTCPreset.from_dict(data)
+
+        dialog = IPTCPresetDialog(preset_objects, active_preset, self)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_name = dialog.get_selected_preset_name()
+            updated_presets = dialog.get_presets()
+
+            # Convert back to dict for storage
+            iptc_presets = {name: preset.to_dict() for name, preset in updated_presets.items()}
+            import_config[self.IPTC_PRESET_LIST_KEY] = iptc_presets
+            import_config[self.IPTC_PRESET_ACTIVE_KEY] = selected_name
+
+            # Update keywords in UI from selected preset
+            selected_preset = updated_presets.get(selected_name)
+            if selected_preset and self.iptc_keywords_input:
+                self.iptc_keywords_input.setPlainText(selected_preset.data.get_keywords_text())
+
+            self._save_import_config(import_config)
+            self._update_iptc_preset_display()
+
+    def _update_iptc_preset_display(self) -> None:
+        """Update IPTC preset display"""
+        if self.iptc_preset_label:
+            import_config = self._get_import_config()
+            preset_name = str(import_config.get(self.IPTC_PRESET_ACTIVE_KEY, self.DEFAULT_IPTC_PRESET_NAME))
+            self.iptc_preset_label.setText(preset_name)
+
     # ===== Import Execution =====
 
     def _start_import(self) -> None:
@@ -1867,6 +2177,10 @@ class ImportDialog(QDialog):
         date_format = str(dest_settings.get("date_format", self.DATE_FORMAT_OPTIONS[0][0]))
         delete_after_import = bool(dest_settings.get("delete_after_import", False))
 
+        # Get IPTC data for import from UI
+        ui_iptc_data = self._get_iptc_data_from_ui()
+        removed_fields = self._iptc_removed_fields.copy()
+
         imported_sources: List[Path] = []
 
         try:
@@ -1884,6 +2198,25 @@ class ImportDialog(QDialog):
                 try:
                     shutil.copy2(source_path, target_file_path)
                     self._write_target_xmp(source_path, target_file_path)
+
+                    # Read existing IPTC data from source image
+                    existing_iptc = read_iptc_from_image(source_path)
+                    
+                    # Merge IPTC data: existing + UI changes (with removal tracking)
+                    merged_iptc = merge_iptc_data(
+                        existing_iptc, 
+                        ui_iptc_data, 
+                        self._iptc_removed_keywords,
+                        removed_fields
+                    )
+                    
+                    # Apply merged IPTC metadata to imported image
+                    if merged_iptc.creator or merged_iptc.copyright or merged_iptc.credit or merged_iptc.source or merged_iptc.keywords:
+                        apply_iptc_to_image(target_file_path, merged_iptc)
+
+                    # Copy markers (pick, rating, color) to imported image via XMP
+                    self._copy_markers_to_target(source_path, target_file_path)
+
                     imported_sources.append(source_path)
                     self.import_status_label.setText(f"Imported {len(imported_sources)}/{total_count}: {target_file_path.name}")
                 except Exception as e:
@@ -1988,6 +2321,82 @@ class ImportDialog(QDialog):
                 shutil.copy2(source_xmp, target_xmp)
         except Exception:
             pass
+
+    def _copy_markers_to_target(self, source_path: Path, target_path: Path) -> None:
+        """Copy markers (pick, rating, color) from source to target XMP"""
+        try:
+            # Get markers from grid widget
+            if not self.grid_widget:
+                return
+
+            marker_data = self.grid_widget.image_markers.get(source_path, {})
+            if not marker_data:
+                return
+
+            # Build XMP content with markers
+            xmp_content = self._build_xmp_with_markers(marker_data)
+            if not xmp_content:
+                return
+
+            # Write to target XMP sidecar
+            target_xmp = target_path.with_suffix(".xmp")
+            if target_xmp.exists():
+                # Read existing XMP and merge
+                try:
+                    with open(target_xmp, 'r', encoding='utf-8') as f:
+                        existing_xmp = f.read()
+                    merged_xmp = self._merge_xmp_markers(existing_xmp, marker_data)
+                    with open(target_xmp, 'w', encoding='utf-8') as f:
+                        f.write(merged_xmp)
+                except Exception:
+                    pass
+            else:
+                # Create new XMP sidecar
+                with open(target_xmp, 'w', encoding='utf-8') as f:
+                    f.write(xmp_content)
+
+        except Exception as e:
+            logger.error("Failed to copy markers for %s: %s", source_path, e)
+
+    def _build_xmp_with_markers(self, marker_data: dict) -> str:
+        """Build XMP XML content with marker data"""
+        pick = marker_data.get("pick", "none")
+        rating = marker_data.get("rating", "0")
+        color = marker_data.get("color", "none")
+
+        xmp_template = '''<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:darktable="http://darktable.sf.net/"
+    darktable:pick="{pick}"
+    darktable:rating="{rating}"
+    darktable:color="{color}"/>
+ </rdf:RDF>
+</x:xmpmeta>'''
+
+        return xmp_template.format(pick=pick, rating=rating, color=color)
+
+    def _merge_xmp_markers(self, existing_xmp: str, marker_data: dict) -> str:
+        """Merge markers into existing XMP content"""
+        pick = marker_data.get("pick", "none")
+        rating = marker_data.get("rating", "0")
+        color = marker_data.get("color", "none")
+
+        # Simple string replacement approach for now
+        # In production, proper XML parsing would be better
+        if 'darktable:pick=' in existing_xmp:
+            existing_xmp = existing_xmp.replace(
+                'darktable:pick="', f'darktable:pick="{pick}" darktable:oldpick="'
+            )
+        else:
+            existing_xmp = existing_xmp.replace(
+                '</rdf:Description>',
+                f' darktable:pick="{pick}" darktable:rating="{rating}" darktable:color="{color}"/>'
+            )
+
+        return existing_xmp
 
     def _delete_imported_sources(self, imported_sources: List[Path]) -> None:
         """Delete source files after import"""
