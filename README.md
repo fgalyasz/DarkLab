@@ -2,7 +2,7 @@
 
 A modern, cross-platform photo editing application built with Python and PyQt6.
 
-> Status: work in progress. Import and Library work today; the other panels are early.
+> Status: work in progress.
 
 ## Features
 
