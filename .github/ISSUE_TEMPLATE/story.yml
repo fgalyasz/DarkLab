@@ -1,0 +1,34 @@
+name: Story
+description: An implementable story under an epic
+title: "[STORY] "
+labels:
+  - story
+body:
+  - type: input
+    id: parent
+    attributes:
+      label: Parent epic
+      description: Epic issue number
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: As a photographer, I want, so that
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Given / When / Then
+    validations:
+      required: true
+  - type: input
+    id: frs
+    attributes:
+      label: Functional requirements
+      description: FR ids this story satisfies
+    validations:
+      required: true

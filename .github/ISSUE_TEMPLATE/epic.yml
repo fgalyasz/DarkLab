@@ -1,0 +1,27 @@
+name: Epic
+description: A user-visible product epic linked to the PRD
+title: "[EPIC] "
+labels:
+  - epic
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What a photographer can do when this epic is done
+    validations:
+      required: true
+  - type: input
+    id: prd
+    attributes:
+      label: PRD
+      description: Path or link to the PRD and the FR ids this epic covers
+    validations:
+      required: true
+  - type: textarea
+    id: stories
+    attributes:
+      label: Stories
+      description: Story ids from epics.md
+    validations:
+      required: true

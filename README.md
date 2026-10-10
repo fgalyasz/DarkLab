@@ -1,63 +1,41 @@
-# DarkLab - Lightroom Classic Alternative
+# DarkLab
 
-A modern, cross-platform photo editing application built with Python and PyQt6.
+DarkLab is a free, open-source desktop photo application for photographers who already work the Lightroom Classic way: import a shoot, cull it, develop the selects, and hand the result off. The seven modules are Library, Develop, Map, Book, Slideshow, Print, and Web.
 
-> Status: work in progress.
+The promise is that workflow, on a local catalog, without a subscription. It is not a promise to open an Adobe catalog or to match Adobe's rendering pixel for pixel.
 
-## Features
+## Status
 
-- **Import**: Import photos from cameras, memory cards, and folders
-- **Library**: Organize and browse your photo collection
-- **Develop**: Professional photo editing tools
-- **Export**: Export photos in various formats
-- **Print**: High-quality printing capabilities
-- **Slideshow**: Create and present photo slideshows
-- **Website**: Build photo galleries and websites
+`main` has an import dialog and a library grid, plus placeholder panels. The product is specified. Implementation follows the epics, starting with catalog and import.
 
-## Requirements
+| | |
+| --- | --- |
+| Brief | [`brief.md`](_bmad-output/planning-artifacts/briefs/brief-DarkLab-2026-10-10/brief.md) |
+| PRD | [`prd.md`](_bmad-output/planning-artifacts/prds/prd-DarkLab-2026-10-10/prd.md) |
+| Architecture | [`architecture.md`](_bmad-output/planning-artifacts/architecture.md) |
+| Epics | [`epics.md`](_bmad-output/planning-artifacts/epics.md) |
+| Process | [`docs/pdlc.md`](docs/pdlc.md) |
 
-- Python 3.8+
-- PyQt6
-- Pillow
-- NumPy
-- OpenCV
-- RawPy
-- ExifRead
+The first milestone is one shoot: import, cull, basic develop, export, with original files left unchanged. Collections, the rest of Develop, Map, Book, Slideshow, Print, Web, and people tags are specified and come after that.
 
-## Installation
+## Run
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Running the Application
+CPython 3.12 or newer.
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 python main.py
 ```
 
-## Architecture
+## Development
 
-The application follows a modular architecture with separate components:
+Features and user-visible fixes follow [`docs/pdlc.md`](docs/pdlc.md). Domain code belongs in `src/catalog`, `src/importing`, `src/develop`, `src/exporting`, and `src/imaging`. Widgets stay in `src/ui` and do not own catalog rules.
 
-- `src/ui/`: User interface components
-- `src/config/`: Configuration management
-- `src/ui/panels/`: Individual functional panels
-- `src/ui/themes.py`: Dark theme styling
-
-## Design Principles
-
-- Platform-independent code
-- Dark theme with macOS-like styling
-- Panel-based interface
-- Configuration persistence
-- Modular, maintainable code structure
-
-## License
-
-MIT License
+```bash
+python -m unittest discover -s tests
+```
 
 ## License
 
