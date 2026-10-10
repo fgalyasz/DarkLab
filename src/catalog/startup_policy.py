@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from src.catalog.session import catalog_to_reopen
@@ -27,9 +28,14 @@ def _plan_stored(settings: dict[str, str], mode: str) -> tuple[str, Path | None]
     path = _stored_path(settings, mode)
     if path is not None:
         return ("open", path)
-    if mode == FIXED:
-        return ("ask", None)
-    return ("none", None)
+    return ("ask", None)
+
+
+def require_catalog(settings: dict[str, str], choose: Callable[[], Path | None]) -> Path | None:
+    action, path = plan_startup(settings)
+    if action == "open" and path is not None:
+        return path
+    return choose()
 
 
 def _stored_path(settings: dict[str, str], mode: str) -> Path | None:

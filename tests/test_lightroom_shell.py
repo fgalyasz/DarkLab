@@ -139,12 +139,25 @@ class LightroomShellTests(unittest.TestCase):
 
     def test_launch_asks_when_the_policy_says_ask(self) -> None:
         from src.ui.main_window import MainWindow
-        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("ask", None)):
-            with patch.object(MainWindow, "_open_catalog_dialog") as ask:
-                window = MainWindow()
-                ask.assert_called_once()
-                window.panels["library"]._cancel_load()
-                window.close()
+        catalog = sample_catalog()
+        chooser = patch("src.ui.main_window.SelectCatalogDialog.pick", return_value=catalog)
+        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("ask", None)), chooser:
+            window = MainWindow()
+            self.assertIsNone(window.catalog_path)
+            self.assertTrue(window.launch_window())
+            self.assertEqual(window.catalog_path, catalog)
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_quitting_the_chooser_refuses_launch(self) -> None:
+        from src.ui.main_window import MainWindow
+        chooser = patch("src.ui.main_window.SelectCatalogDialog.pick", return_value=None)
+        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("ask", None)), chooser:
+            window = MainWindow()
+            self.assertFalse(window.launch_window())
+            self.assertIsNone(window.catalog_path)
+            window.panels["library"]._cancel_load()
+            window.close()
 
     def test_panel_header_collapses_and_expands(self) -> None:
         from PyQt6.QtCore import Qt

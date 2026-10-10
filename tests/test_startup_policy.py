@@ -4,7 +4,15 @@ from pathlib import Path
 
 from src.catalog.database import create_catalog
 from src.catalog.session import remember_catalog
-from src.catalog.startup_policy import ASK, FIXED, RECENT, fixed_catalog_error, plan_startup
+from src.catalog.startup_policy import ASK, FIXED, RECENT, fixed_catalog_error, plan_startup, require_catalog
+
+
+class Choice:
+    def __init__(self, path: Path | None) -> None:
+        self.path = path
+
+    def pick(self) -> Path | None:
+        return self.path
 
 
 class StartupPolicyTests(unittest.TestCase):
@@ -18,10 +26,23 @@ class StartupPolicyTests(unittest.TestCase):
         settings = {"startup_mode": RECENT, "catalog_path": str(catalog)}
         self.assertEqual(plan_startup(settings), ("open", catalog))
 
-    def test_recent_without_a_file_does_not_ask(self) -> None:
-        self.assertEqual(plan_startup({}), ("none", None))
+    def test_recent_without_a_file_must_choose(self) -> None:
+        self.assertEqual(plan_startup({}), ("ask", None))
         missing = {"startup_mode": "nope", "catalog_path": "/missing.darklab"}
-        self.assertEqual(plan_startup(missing), ("none", None))
+        self.assertEqual(plan_startup(missing), ("ask", None))
+
+    def test_require_catalog_skips_the_chooser_when_one_exists(self) -> None:
+        catalog = self._catalog("wedding")
+        settings = {"startup_mode": RECENT, "catalog_path": str(catalog)}
+        self.assertEqual(require_catalog(settings, self._refuse_choice), catalog)
+
+    def test_require_catalog_uses_the_chooser_or_quits(self) -> None:
+        chosen = self._catalog("wedding")
+        self.assertEqual(require_catalog({}, Choice(chosen).pick), chosen)
+        self.assertIsNone(require_catalog({}, Choice(None).pick))
+
+    def _refuse_choice(self) -> Path | None:
+        raise AssertionError("chooser should not run")
 
     def test_fixed_opens_the_pinned_file(self) -> None:
         pinned = self._catalog("wedding")

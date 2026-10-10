@@ -36,14 +36,20 @@ def main():
     _refuse_missing_screen(app.primaryScreen(), logger)
 
     try:
-        main_window = MainWindow()
-        main_window.show()
-        logger.info("Application started successfully")
-        
-        sys.exit(app.exec())
+        _run_window(app, logger)
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         sys.exit(1)
+
+
+def _run_window(app: QApplication, logger: logging.Logger) -> None:
+    window = MainWindow()
+    if not window.launch_window():
+        logger.info("Quit before a catalog was opened")
+        sys.exit(0)
+    window.show()
+    logger.info("Application started successfully")
+    sys.exit(app.exec())
 
 
 def _refuse_missing_screen(screen: QScreen | None, logger: logging.Logger) -> None:

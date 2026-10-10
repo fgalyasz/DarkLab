@@ -6,7 +6,7 @@ The promise is that workflow, on a local catalog, without a subscription. It is 
 
 ## Status
 
-`main` can create a `.darklab` catalog and choose whether launch asks, reopens the last catalog, or opens a pinned one. The window has an import dialog, a Library browser, and a Develop panel shell. Map, Book, Slideshow, Print, and Web are empty modules.
+`main` opens a workspace only after a catalog is current. Launch can ask, reopen the last catalog, or open a pinned one. The window has an import dialog, a Library browser, and a Develop panel shell. Map, Book, Slideshow, Print, and Web are empty modules.
 
 | | |
 | --- | --- |

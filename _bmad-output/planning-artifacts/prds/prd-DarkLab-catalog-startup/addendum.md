@@ -10,9 +10,10 @@ The config file uses `catalog.startup_mode`, `catalog.path`, and `catalog.fixed_
 
 `plan_startup` returns one of:
 
-- `ask` and no path — show the Open Catalog window
+- `ask` and no path — show Select Catalog before the workspace
 - `open` and a path — that file exists
-- `none` and no path — recent mode has nothing to open; leave the window without a Catalog
+
+There is no `none` result. A launch that cannot open a file must ask. `require_catalog` returns the chooser's path, or nothing when the Photographer quits. Nothing means the process exits before `show()`.
 
 ## Rejected
 

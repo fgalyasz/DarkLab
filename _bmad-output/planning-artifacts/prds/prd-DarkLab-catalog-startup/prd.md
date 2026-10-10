@@ -33,10 +33,10 @@ A Photographer who keeps more than one Catalog should decide what the next launc
   - **Path:** She opens Catalog Settings, chooses "Always open this catalog," and selects the wedding file. Later she opens the personal Catalog to grab one Photo, then quits.
   - **Climax:** The next launch opens the wedding Catalog, not the personal one.
   - **Resolution:** The personal Catalog is still the most recent Catalog, so switching the setting to "most recent" would open that one instead.
-  - **Edge case:** If the pinned file has been moved, launch shows the Open Catalog window instead of an empty library with no explanation.
+  - **Edge case:** If the pinned file has been moved, launch shows Select Catalog. Quit closes DarkLab.
 
 - **UJ-8. Anna wants to be asked.**
-  - Anna sets startup to always ask. The next launch shows the Open Catalog window before a Catalog is current. Cancel leaves the window open with no Catalog.
+  - Anna sets startup to always ask. The next launch shows Select Catalog before the workspace. She can open a Catalog or create one. Quit closes DarkLab. There is no workspace without a current Catalog.
 
 ## 3. Glossary
 
@@ -57,10 +57,9 @@ The Photographer can set Startup Mode to ask, recent, or fixed. The choice is st
 **Consequences (testable):**
 - The default Startup Mode, when none is stored, is recent.
 - An unknown stored value is treated as recent.
-- Ask shows the Open Catalog window even when a recent Catalog file exists.
-- Canceling that window leaves no Catalog current.
+- Ask shows Select Catalog even when a recent Catalog file exists.
 - Recent opens the last opened Catalog when that file exists.
-- Recent does not show the Open Catalog window when no last Catalog is stored or the file is missing.
+- Recent shows Select Catalog when no last Catalog is stored or the file is missing.
 
 #### FR-49: Pin a Catalog
 
@@ -70,8 +69,18 @@ In fixed Startup Mode the Photographer chooses one Catalog file. Launch opens th
 - Saving fixed without an existing file is refused, and the previous setting stays.
 - Opening a different Catalog does not change the pinned file.
 - Launch opens the pinned file when it exists.
-- Launch shows the Open Catalog window when the pinned file is missing.
+- Launch shows Select Catalog when the pinned file is missing.
 - Switching Startup Mode away from fixed keeps the pinned path stored, so returning to fixed uses the same file.
+
+#### FR-50: A Catalog is required
+
+The workspace opens only when a Catalog is current. Select Catalog offers Open and New. Quit closes DarkLab.
+
+**Consequences (testable):**
+- Launch with no resolvable Catalog shows Select Catalog before the workspace.
+- Choosing an existing Catalog or creating one makes that Catalog current, then shows the workspace.
+- Quit on Select Catalog closes DarkLab and does not show the workspace.
+- Canceling the file chooser returns to Select Catalog. It does not open an empty workspace.
 
 ## 5. Non-Goals
 
@@ -81,15 +90,15 @@ In fixed Startup Mode the Photographer chooses one Catalog file. Launch opens th
 
 ## 6. MVP Scope
 
-FR-48 and FR-49 are in scope for this change. They do not wait for the rest of the baseline milestone.
+FR-48, FR-49, and FR-50 are in scope for this change. They do not wait for the rest of the baseline milestone.
 
 ## 7. Success Metrics
 
-- **SM-4:** A restart after each Startup Mode follows the consequences in FR-48 and FR-49 on a fixture with two Catalog files. Validates FR-48, FR-49.
+- **SM-4:** A restart after each Startup Mode follows the consequences in FR-48, FR-49, and FR-50 on a fixture with two Catalog files. Validates FR-48, FR-49, FR-50.
 
 **Counter-metrics**
 
-- **SM-C3:** Do not open a file dialog on launch for recent mode when the Photographer has not asked to be prompted. Counterbalances the temptation to make ask the default.
+- **SM-C3:** Do not prompt when recent mode already has a Catalog file. Prompting when no Catalog can be opened is required by FR-50. Counterbalances making ask the default.
 
 ## 8. Open Questions
 

@@ -74,7 +74,7 @@ Import, Library, Develop, and Export do not open sockets. Map is the exception a
 
 ### ADR-9 — Startup policy stays out of the widget
 
-`src/catalog/startup_policy.py` chooses ask, recent, or fixed. The Catalog Settings dialog collects the choice and does not decide what launch should do. Config keys are `catalog.startup_mode`, `catalog.path`, and `catalog.fixed_path`. A missing recent Catalog does not open a dialog. A missing pinned Catalog does. Opening a Catalog updates `catalog.path` only.
+`src/catalog/startup_policy.py` chooses ask, recent, or fixed. The Catalog Settings dialog collects the choice and does not decide what launch should do. Config keys are `catalog.startup_mode`, `catalog.path`, and `catalog.fixed_path`. A missing recent Catalog and a missing pinned Catalog both show Select Catalog before the workspace. Quit exits. Recent mode with a file still opens that file without asking. Opening a Catalog updates `catalog.path` only.
 
 ## Patterns
 

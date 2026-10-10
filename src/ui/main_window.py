@@ -13,7 +13,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from src.catalog.database import create_catalog, open_catalog
-from src.catalog.startup_policy import plan_startup
+from src.catalog.startup_policy import plan_startup, require_catalog
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
@@ -26,6 +26,7 @@ from src.ui.panels.website_panel import WebsitePanel
 from src.ui.catalog_filter import CATALOG_FILTER
 from src.ui.dialogs import ImportDialog
 from src.ui.dialogs.catalog_settings_dialog import CatalogSettingsDialog
+from src.ui.dialogs.select_catalog_dialog import SelectCatalogDialog
 from src.ui.widgets.module_bar import ModuleBar
 
 
@@ -250,13 +251,18 @@ class MainWindow(QMainWindow):
         self.config_manager.set("catalog.startup_mode", dialog.chosen_mode())
         self.config_manager.set("catalog.fixed_path", dialog.chosen_fixed_path())
 
+    def launch_window(self) -> bool:
+        chosen = require_catalog(self._catalog_settings(), SelectCatalogDialog.pick)
+        if chosen is None:
+            return False
+        if self.catalog_path != chosen:
+            self._use_catalog(chosen)
+        return True
+
     def _restore_catalog(self) -> None:
         action, path = plan_startup(self._catalog_settings())
         if action == "open" and path is not None:
             self._show_open_catalog(path)
-            return
-        if action == "ask":
-            self._open_catalog_dialog()
 
     def _show_open_catalog(self, path: Path) -> None:
         self.catalog_path = path

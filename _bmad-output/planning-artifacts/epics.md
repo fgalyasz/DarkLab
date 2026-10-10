@@ -72,6 +72,7 @@ Fast path, 2026-10-10. Epic order follows the thesis: finish one shoot, then org
 - FR-47 Face confirmation
 - FR-48 Choose a Startup Mode
 - FR-49 Pin a Catalog
+- FR-50 A Catalog is required
 
 ### NonFunctional Requirements
 
@@ -146,6 +147,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 - FR-47 Epic 10
 - FR-48 Epic 11
 - FR-49 Epic 11
+- FR-50 Epic 12
 
 ## Epic List
 
@@ -160,6 +162,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 9. Book and Web — PDF book and a static gallery
 10. People — confirm faces when a detector exists
 11. Catalog startup — ask, reopen the last Catalog, or open a pinned Catalog
+12. Catalog required — the workspace opens only after a Catalog is current
 
 ## Epic 1: Catalog and Import
 
@@ -841,13 +844,12 @@ So that I am asked, returned to the last Catalog, or returned to the pin.
 
 **Given** Ask
 **When** DarkLab launches
-**Then** the Open Catalog window is shown
-**And** cancel leaves no Catalog current
+**Then** Select Catalog is shown before the workspace
 
 **Given** recent mode and an existing last Catalog
 **When** DarkLab launches
 **Then** that Catalog is current
-**And** a missing last Catalog does not show the Open Catalog window
+**And** a missing last Catalog shows Select Catalog before the workspace
 
 **Given** a pinned file that exists
 **When** DarkLab launches
@@ -855,4 +857,30 @@ So that I am asked, returned to the last Catalog, or returned to the pin.
 
 **Given** a pinned file that is missing
 **When** DarkLab launches
-**Then** the Open Catalog window is shown
+**Then** Select Catalog is shown before the workspace
+
+## Epic 12: Catalog required
+
+The workspace does not open until a Catalog is current.
+
+### Story 12.1: Choose or quit before the workspace
+
+As a Photographer,
+I want DarkLab to require a Catalog the way Lightroom does,
+So that I never edit in an empty window that has nowhere to put Photos.
+
+**Acceptance Criteria:**
+
+**Given** no Catalog can be resolved at launch
+**When** DarkLab starts
+**Then** Select Catalog is shown before the workspace
+**And** Open and New are both available
+
+**Given** Select Catalog
+**When** Quit is chosen
+**Then** DarkLab exits
+**And** the workspace is not shown
+
+**Given** the file chooser
+**When** it is cancelled
+**Then** Select Catalog stays open
