@@ -4,13 +4,16 @@ Handles the main UI layout and panel management
 """
 
 import logging
+from pathlib import Path
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout,
-    QStackedWidget, QMenuBar, QMenu
+    QFileDialog, QMainWindow, QMenu, QMenuBar, QMessageBox,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
+from src.catalog.database import create_catalog, open_catalog
+from src.catalog.session import catalog_to_reopen
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
@@ -23,6 +26,14 @@ from src.ui.panels.website_panel import WebsitePanel
 from src.ui.dialogs import ImportDialog
 from src.ui.widgets.module_bar import ModuleBar
 
+CATALOG_FILTER = "DarkLab Catalog (*.darklab)"
+
+
+def _selected_path(selected: str) -> Path | None:
+    if selected == "":
+        return None
+    return Path(selected)
+
 
 class MainWindow(QMainWindow):
     """Main application window"""
@@ -32,6 +43,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger(__name__)
         self.config_manager = ConfigManager()
         self.panels = {}
+        self.catalog_path: Path | None = None
         self.module_bar: ModuleBar | None = None
         
         self._setup_window()
@@ -83,6 +95,7 @@ class MainWindow(QMainWindow):
         # File menu
         file_menu = QMenu("&File", self)
         menu_bar.addMenu(file_menu)
+        self._setup_catalog_actions(file_menu)
 
         # Import action
         import_action = file_menu.addAction("&Import...")
@@ -149,6 +162,7 @@ class MainWindow(QMainWindow):
         if current_panel not in self.panels:
             current_panel = "library"
         self._switch_to_panel(current_panel)
+        self._restore_catalog()
 
         # Setup keyboard shortcut for Import dialog (Cmd+I on Mac, Ctrl+I elsewhere)
         self._setup_import_shortcut()
@@ -171,6 +185,65 @@ class MainWindow(QMainWindow):
         # Use Ctrl+Shift+I on all platforms (PyQt handles Cmd+Shift on Mac automatically)
         shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
         shortcut.activated.connect(self._open_import_dialog)
+
+    def _setup_catalog_actions(self, file_menu: QMenu) -> None:
+        new_catalog = file_menu.addAction("New &Catalog...")
+        new_catalog.triggered.connect(self._create_catalog)
+        open_action = file_menu.addAction("&Open Catalog...")
+        open_action.triggered.connect(self._open_catalog_dialog)
+        file_menu.addSeparator()
+
+    def _create_catalog(self) -> None:
+        path = _selected_path(self._choose_save_path())
+        if path is None:
+            return
+        self._create_chosen_catalog(path)
+
+    def _create_chosen_catalog(self, path: Path) -> None:
+        try:
+            self._use_catalog(create_catalog(path))
+        except OSError as error:
+            self.logger.error("Create catalog failed: %s", path)
+            QMessageBox.warning(self, "New Catalog", str(error))
+
+    def _open_catalog_dialog(self) -> None:
+        path = _selected_path(self._choose_open_path())
+        if path is None:
+            return
+        self._open_chosen_catalog(path)
+
+    def _open_chosen_catalog(self, path: Path) -> None:
+        try:
+            self._use_catalog(open_catalog(path))
+        except (FileNotFoundError, ValueError) as error:
+            self.logger.error("Open catalog failed: %s", path)
+            QMessageBox.warning(self, "Open Catalog", str(error))
+
+    def _choose_save_path(self) -> str:
+        selected, _chosen = QFileDialog.getSaveFileName(self, "New Catalog", "", CATALOG_FILTER)
+        return selected
+
+    def _choose_open_path(self) -> str:
+        selected, _chosen = QFileDialog.getOpenFileName(self, "Open Catalog", "", CATALOG_FILTER)
+        return selected
+
+    def _use_catalog(self, path: Path) -> None:
+        self.catalog_path = path
+        self.config_manager.set("catalog.path", str(path))
+        self.setWindowTitle(f"{path.stem} - DarkLab")
+
+    def _restore_catalog(self) -> None:
+        path = catalog_to_reopen(self._catalog_settings())
+        if path is None:
+            return
+        self.catalog_path = path
+        self.setWindowTitle(f"{path.stem} - DarkLab")
+
+    def _catalog_settings(self) -> dict[str, str]:
+        stored = self.config_manager.get("catalog.path", "")
+        if not isinstance(stored, str) or stored == "":
+            return {}
+        return {"catalog_path": stored}
 
     def _open_import_dialog(self) -> None:
         """Open the Import dialog"""

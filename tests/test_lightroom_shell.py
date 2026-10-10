@@ -117,6 +117,16 @@ class LightroomShellTests(unittest.TestCase):
             library._cancel_load()
             window.close()
 
+    def test_catalog_actions_exist(self) -> None:
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            titles = [action.text() for action in window.menuBar().actions()[0].menu().actions()]
+            self.assertIn("New &Catalog...", titles)
+            self.assertIn("&Open Catalog...", titles)
+            window.panels["library"]._cancel_load()
+            window.close()
+
     def test_panel_header_collapses_and_expands(self) -> None:
         from PyQt6.QtCore import Qt
         from PyQt6.QtTest import QTest
