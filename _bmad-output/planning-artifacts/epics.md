@@ -362,6 +362,28 @@ So that I do not scroll sideways to reach renaming, metadata, or the destination
 **Then** it has no horizontal scrollbar
 **And** the settings content is no wider than the column
 
+### Story 1.10: Remove index images
+
+As a Photographer,
+I want to remove an index image from the Catalog,
+So that I can choose whether the Original file stays on disk.
+
+**Acceptance Criteria:**
+
+**Given** a selected index image
+**When** Remove asks what to delete
+**Then** one choice deletes only the index image
+**And** the Original file stays on disk
+
+**Given** the same question
+**When** the Photographer also deletes the Original
+**Then** that file is removed from disk
+**And** the index image and the Photo row are gone
+
+**Given** the Original cannot be deleted
+**When** that choice runs
+**Then** the Photo and its index image stay
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.

@@ -65,7 +65,7 @@ Import, whether Add, Copy, or Move, records each resulting file in the open Cata
 
 No DarkLab code path opens an Original for write. Export and preview write only under the export destination or the Catalog's `previews/` directory. Tests for FR-21 and FR-37 hash the Original before and after.
 
-Move-import may delete a source only after the destination file exists and its size matches (FR-5). That is the one intentional delete, and it deletes the source path the Photographer chose to move, not a file that was already a Catalog Original elsewhere.
+Move-import may delete a source only after the destination file exists and its size matches (FR-5). That deletes the source path the Photographer chose to move. Removing a Photo from the Catalog deletes its index image and its Photo row. The Original file is deleted only when the Photographer chooses that in the removal dialog (FR-58), and only that stored path.
 
 ### ADR-4 — XMP sidecar beside the Original
 

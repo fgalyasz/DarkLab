@@ -149,6 +149,7 @@ class MainWindow(QMainWindow):
         library = self.panels.get("library")
         if isinstance(library, LibraryBrowserPanel):
             library.import_requested.connect(self._open_import_dialog)
+            library.catalog_changed.connect(self._refresh_open_catalog)
     
     def _apply_initial_state(self) -> None:
         """Apply initial window state from config"""

@@ -24,6 +24,13 @@ def index_image_path(catalog: Path, photo_id: int) -> Path:
     return preview_directory(catalog) / f"{photo_id}.jpg"
 
 
+def delete_index_image(catalog: Path, photo_id: int) -> None:
+    _require_photo_id(photo_id)
+    path = index_image_path(catalog, photo_id)
+    if path.is_file():
+        path.unlink()
+
+
 def list_index_images(catalog: Path) -> list[Path]:
     folder = preview_directory(catalog)
     if not folder.is_dir():

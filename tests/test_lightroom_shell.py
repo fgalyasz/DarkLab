@@ -143,6 +143,44 @@ class LightroomShellTests(unittest.TestCase):
         panel._cancel_load()
         panel.close()
 
+    def test_library_removes_an_index_without_the_original(self) -> None:
+        from src.catalog.index_images import list_index_images
+        from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
+        from src.ui.panels.library_browser_panel import LibraryBrowserPanel
+        from tests.test_catalog_removal import _catalog_with_photo
+        catalog, original = _catalog_with_photo()
+        panel = LibraryBrowserPanel()
+        panel.show_catalog(catalog)
+        panel._selected = list(list_index_images(catalog))
+        panel._update_status()
+        self.assertTrue(panel.remove_button.isEnabled())
+        panel._remove_selected(False)
+        self.assertEqual(panel.grid.images, [])
+        self.assertTrue(original.is_file())
+        choice = RemovalChoiceDialog(None, 2)
+        self.assertEqual(choice.index_button.text(), "Delete index image only")
+        self.assertEqual(choice.original_button.text(), "Also delete the original from disk")
+        choice._index_only()
+        self.assertFalse(choice.deletes_original())
+        choice._with_original()
+        self.assertTrue(choice.deletes_original())
+        panel._cancel_load()
+        panel.close()
+
+    def test_library_can_delete_the_original_file(self) -> None:
+        from src.catalog.index_images import list_index_images
+        from src.ui.panels.library_browser_panel import LibraryBrowserPanel
+        from tests.test_catalog_removal import _catalog_with_photo
+        catalog, original = _catalog_with_photo()
+        panel = LibraryBrowserPanel()
+        panel.show_catalog(catalog)
+        panel._selected = list(list_index_images(catalog))
+        panel._remove_selected(True)
+        self.assertFalse(original.is_file())
+        self.assertEqual(panel.grid.images, [])
+        panel._cancel_load()
+        panel.close()
+
     def test_launch_opens_the_planned_catalog(self) -> None:
         from src.ui.main_window import MainWindow
         catalog = sample_catalog()

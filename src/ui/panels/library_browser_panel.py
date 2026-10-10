@@ -3,15 +3,17 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, QThreadPool, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QComboBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+    QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QListWidget, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget,
     QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from src.config.config_manager import ConfigManager
 from src.catalog.index_images import list_index_images
+from src.catalog.removal import photo_id_of_index, remove_indexes
+from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
 from src.ui.library_catalog import (
@@ -65,6 +67,7 @@ class SourceFolderTree(QTreeWidget):
 
 class LibraryBrowserPanel(BasePanel):
     import_requested = pyqtSignal()
+    catalog_changed = pyqtSignal()
 
     def __init__(self) -> None:
         self._config = ConfigManager()
@@ -96,6 +99,7 @@ class LibraryBrowserPanel(BasePanel):
         root.addWidget(self._workspace(), 1)
         root.addWidget(self._build_filmstrip())
         root.addWidget(self._build_toolbar())
+        self._bind_removal_keys()
         self._populate_folders()
         self._load_all_photographs()
 
@@ -265,6 +269,9 @@ class LibraryBrowserPanel(BasePanel):
         self.status_label = QLabel("0 photos")
         row.addWidget(self.status_label)
         row.addWidget(self._tool_button("Import...", self._request_import))
+        self.remove_button = self._tool_button("Remove...", self._ask_removal)
+        self.remove_button.setEnabled(False)
+        row.addWidget(self.remove_button)
         row.addWidget(self._tool_button("Export...", self._export_selected))
         self.grid_button = self._view_button("Grid", "grid")
         self.loupe_button = self._view_button("Loupe", "loupe")
@@ -521,10 +528,39 @@ class LibraryBrowserPanel(BasePanel):
     def _update_status(self) -> None:
         visible = len(self.grid.images)
         selected = len(self._selected)
+        self._sync_remove_button()
         if selected:
             self.status_label.setText(f"{selected} of {visible} photos")
             return
         self.status_label.setText(f"{visible} photos")
+
+    def _sync_remove_button(self) -> None:
+        if hasattr(self, "remove_button"):
+            self.remove_button.setEnabled(bool(self._selected) and self._catalog is not None)
+
+    def _bind_removal_keys(self) -> None:
+        self._removal_key(Qt.Key.Key_Delete)
+        self._removal_key(Qt.Key.Key_Backspace)
+
+    def _removal_key(self, key: Qt.Key) -> None:
+        shortcut = QShortcut(QKeySequence(key), self.grid)
+        shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        shortcut.activated.connect(self._ask_removal)
+
+    def _ask_removal(self) -> None:
+        if self._catalog is None or not self._selected:
+            return
+        dialog = RemovalChoiceDialog(self, len(self._selected))
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._remove_selected(dialog.deletes_original())
+
+    def _remove_selected(self, delete_original: bool) -> None:
+        if self._catalog is None:
+            return
+        remove_indexes(self._catalog, _photo_ids(self._selected), delete_original)
+        self._load_all_photographs()
+        self.catalog_changed.emit()
 
     def _request_import(self) -> None:
         self.import_requested.emit()
@@ -581,6 +617,11 @@ def _add_placeholder(item: QTreeWidgetItem, path: Path) -> None:
 
 def _has_subfolders(path: Path) -> bool:
     return any(child.is_dir() and not child.name.startswith(".") for child in path.iterdir())
+
+
+def _photo_ids(paths: list[Path]) -> list[int]:
+    found = [photo_id_of_index(path) for path in paths]
+    return [photo_id for photo_id in found if photo_id is not None]
 
 
 def _remove_placeholder(item: QTreeWidgetItem) -> bool:

@@ -12,6 +12,28 @@ INSERT_PHOTO = "INSERT INTO photos (original_path, content_hash) VALUES (?, ?)"
 MISSING_HASH = "SELECT id, original_path FROM photos WHERE content_hash IS NULL"
 WRITE_HASH = "UPDATE photos SET content_hash = ? WHERE id = ? AND content_hash IS NULL"
 READ_HASH = "SELECT content_hash FROM photos WHERE original_path = ?"
+READ_ORIGINAL = "SELECT original_path FROM photos WHERE id = ?"
+DELETE_PHOTO = "DELETE FROM photos WHERE id = ?"
+
+
+def photo_original(catalog: Path, photo_id: int) -> Path | None:
+    connection = sqlite3.connect(database_file(catalog))
+    try:
+        row = connection.execute(READ_ORIGINAL, (photo_id,)).fetchone()
+    finally:
+        connection.close()
+    if row is None:
+        return None
+    return Path(str(row[0]))
+
+
+def forget_photo(catalog: Path, photo_id: int) -> None:
+    connection = sqlite3.connect(database_file(catalog))
+    try:
+        connection.execute(DELETE_PHOTO, (photo_id,))
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def known_content(catalog: Path, digest: str) -> bool:

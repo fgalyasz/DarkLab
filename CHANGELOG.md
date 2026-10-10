@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Library can remove index images from the catalog. The choice is to delete only the index image, or to delete the original file from disk as well.
 - The Import side panel stays within its width. Long names and the metadata note wrap instead of opening a horizontal scrollbar.
 - Import separates File Renaming, Metadata, and Destination into shaded blocks. Destination keeps its folder presets. The top bar, the source, the grid, and the bottom bar are separate bands.
 - Import keeps Copy, Move, and Add in one row. Assisted Culling sits apart from that choice. The Add caption appears only while Add is selected.
