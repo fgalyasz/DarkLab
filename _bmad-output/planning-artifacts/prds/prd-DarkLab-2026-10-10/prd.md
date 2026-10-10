@@ -206,6 +206,7 @@ The Photographer can browse Photos as a grid and open one Photo in loupe.
 **Consequences (testable):**
 - Grid order is stable for a chosen sort (capture time, filename, Import time, Rating).
 - Loupe shows the same Photo the grid selection has.
+- Which files the grid lists before Import is FR-55 and FR-56 in `prd-DarkLab-library-grid`.
 
 #### FR-10: Compare and survey
 

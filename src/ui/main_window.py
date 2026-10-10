@@ -236,9 +236,8 @@ class MainWindow(QMainWindow):
         return QFileDialog.getExistingDirectory(self, "Open Catalog", "")
 
     def _use_catalog(self, path: Path) -> None:
-        self.catalog_path = path
         self.config_manager.set("catalog.path", str(path))
-        self.setWindowTitle(f"{path.stem} - DarkLab")
+        self._publish_catalog(path)
 
     def _edit_catalog_settings(self) -> None:
         dialog = CatalogSettingsDialog(self._catalog_settings(), self)
@@ -264,8 +263,18 @@ class MainWindow(QMainWindow):
             self._show_open_catalog(path)
 
     def _show_open_catalog(self, path: Path) -> None:
+        self._publish_catalog(path)
+
+    def _publish_catalog(self, path: Path) -> None:
         self.catalog_path = path
         self.setWindowTitle(f"{path.stem} - DarkLab")
+        self._show_catalog_photos(path)
+
+    def _show_catalog_photos(self, path: Path) -> None:
+        for panel in self.panels.values():
+            show = getattr(panel, "show_catalog", None)
+            if show is not None:
+                show(path)
 
     def _catalog_settings(self) -> dict[str, str]:
         return {

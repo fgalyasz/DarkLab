@@ -77,6 +77,8 @@ Fast path, 2026-10-10. Epic order follows the thesis: finish one shoot, then org
 - FR-52 Imported folder paths
 - FR-53 Index images
 - FR-54 Catalog settings
+- FR-55 A new Catalog shows no Photos
+- FR-56 The Library grid lists Catalog index images
 
 ### NonFunctional Requirements
 
@@ -156,6 +158,8 @@ No UX document. Stories use the Module names from the PRD glossary.
 - FR-52 Epic 13
 - FR-53 Epic 13
 - FR-54 Epic 13
+- FR-55 Epic 14
+- FR-56 Epic 14
 
 ## Epic List
 
@@ -172,6 +176,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 11. Catalog startup — ask, reopen the last Catalog, or open a pinned Catalog
 12. Catalog required — the workspace opens only after a Catalog is current
 13. Catalog package — one folder holds imported folders, index images, and that Catalog's settings
+14. Library grid — the grid lists the open Catalog's index images and stays empty until some exist
 
 ## Epic 1: Catalog and Import
 
@@ -935,3 +940,32 @@ So that copying the folder takes the shoot's DarkLab state with it.
 **Given** Startup Mode
 **When** a Catalog setting is saved
 **Then** Startup Mode stays in the application config
+
+## Epic 14: Library grid
+
+The Library shows Photos only after they are in the open Catalog.
+
+### Story 14.1: Build the grid from index images
+
+As a Photographer,
+I want a new Catalog to open with an empty Library,
+So that I see only Photos I have imported into that Catalog.
+
+**Acceptance Criteria:**
+
+**Given** a new Catalog
+**When** the Library opens
+**Then** the grid and the filmstrip are empty
+
+**Given** index images in the open Catalog
+**When** the Library opens
+**Then** the grid lists those index images in Photo id order
+**And** files in the preview cache that are not index images are omitted
+
+**Given** one Catalog with index images and another without
+**When** the Photographer switches to the empty Catalog
+**Then** the grid becomes empty
+
+**Given** a disk folder that contains photographs
+**When** the open Catalog has no index images
+**Then** the Library does not show those photographs

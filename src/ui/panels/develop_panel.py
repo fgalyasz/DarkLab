@@ -6,15 +6,14 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QScrollArea, QSplitter, QVBoxLayout, QWidget, QCheckBox,
 )
 
-from src.config.config_manager import ConfigManager
 from src.ui.develop_info import read_exposure_text
 from src.ui.develop_sections import (
     DevelopControls, basic_panel, calibration_panel, collections_tree, color_grading_panel,
     color_mixer_panel, detail_panel, effects_panel, history_list, lens_panel, presets_panel,
     tone_curve_panel, transform_panel,
 )
+from src.catalog.index_images import list_index_images
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
-from src.ui.library_catalog import existing_paths, pictures_directory
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.preview_image import tone_image
@@ -35,7 +34,7 @@ class ThumbRelay(QObject):
 
 class DevelopPanel(BasePanel):
     def __init__(self) -> None:
-        self._config = ConfigManager()
+        self._catalog: Path | None = None
         self._controls = DevelopControls()
         self._baseline: list[int] = []
         self._photos: list[Path] = []
@@ -159,12 +158,18 @@ class DevelopPanel(BasePanel):
             if row.title in ("Exposure", "Contrast"):
                 row.changed.connect(self._paint_preview)
 
+    def show_catalog(self, catalog: Path | None) -> None:
+        self._catalog = catalog
+        self._load_photos()
+
     def _load_photos(self) -> None:
-        stored = existing_paths(self._config.get("library.catalog_paths", []))
-        if stored:
-            self._show_paths(stored)
-            return
-        self._load_folder(str(pictures_directory()))
+        self._cancel_load()
+        self._show_paths(self._catalog_indexes())
+
+    def _catalog_indexes(self) -> list[Path]:
+        if self._catalog is None:
+            return []
+        return list_index_images(self._catalog)
 
     def _load_folder(self, folder: str) -> None:
         self._cancel_load()

@@ -11,11 +11,11 @@ from PyQt6.QtWidgets import (
 )
 
 from src.config.config_manager import ConfigManager
+from src.catalog.index_images import list_index_images
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
 from src.ui.library_catalog import (
-    existing_paths, filter_paths, keyword_tokens, matches_rating,
-    pictures_directory, previous_import_directory, sort_paths,
+    filter_paths, keyword_tokens, matches_rating, pictures_directory, sort_paths,
 )
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
@@ -68,6 +68,7 @@ class LibraryBrowserPanel(BasePanel):
 
     def __init__(self) -> None:
         self._config = ConfigManager()
+        self._catalog: Path | None = None
         self._images: list[Path] = []
         self._selected: list[Path] = []
         self._thumbs: dict[Path, QPixmap] = {}
@@ -319,30 +320,24 @@ class LibraryBrowserPanel(BasePanel):
         if row == 1:
             self._load_previous_import()
 
+    def show_catalog(self, catalog: Path | None) -> None:
+        self._catalog = catalog
+        self._load_all_photographs()
+
     def _load_all_photographs(self) -> None:
-        paths = existing_paths(self._config.get("library.catalog_paths", []))
-        if paths:
-            self._show_paths(paths)
-            return
-        self._load_folder(str(pictures_directory()))
+        self._cancel_load()
+        self._show_paths(self._catalog_indexes())
+
+    def _catalog_indexes(self) -> list[Path]:
+        if self._catalog is None:
+            return []
+        return list_index_images(self._catalog)
 
     def _load_previous_import(self) -> None:
-        settings = self._config.get("panels.import.import_settings", {})
-        folder = previous_import_directory(settings)
-        if folder is None:
-            self.status_label.setText("No previous import destination.")
-            return
-        self._load_folder(str(folder))
+        self._load_all_photographs()
 
-    def _load_folder(self, folder: str) -> None:
-        self._cancel_load()
-        self.status_label.setText(f"Loading {Path(folder).name}...")
-        self._discovery = ImageDiscoveryThread(folder, recursive=False)
-        self._discovery.discovery_finished.connect(self._on_discovered)
-        self._discovery.start()
-
-    def _on_discovered(self, paths: list[str]) -> None:
-        self._show_paths([Path(path) for path in paths])
+    def _load_folder(self, _folder: str) -> None:
+        self._load_all_photographs()
 
     def _show_paths(self, paths: list[Path]) -> None:
         self._images = list(paths)

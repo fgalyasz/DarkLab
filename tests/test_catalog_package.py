@@ -7,7 +7,7 @@ from pathlib import Path
 from src.catalog.catalog_settings import read_catalog_setting, write_catalog_setting
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.folders import add_imported_folder, imported_folders
-from src.catalog.index_images import read_index_image, write_index_image
+from src.catalog.index_images import list_index_images, read_index_image, write_index_image
 from src.catalog.locations import PREVIEWS_NAME, SETTINGS_NAME, database_file
 from src.catalog.session import catalog_to_reopen, remember_catalog
 
@@ -51,6 +51,16 @@ class CatalogPackageTests(unittest.TestCase):
         self.assertEqual(create_catalog(catalog), catalog)
         self.assertEqual(read_catalog_setting(catalog, "preview_size"), "standard")
         self.assertEqual(read_index_image(catalog, 1), b"jpeg")
+
+    def test_index_list_is_empty_until_images_exist(self) -> None:
+        catalog = create_catalog(Path(tempfile.mkdtemp()) / "wedding")
+        self.assertEqual(list_index_images(catalog), [])
+        second = write_index_image(catalog, 2, b"b")
+        first = write_index_image(catalog, 1, b"a")
+        (catalog / "previews" / "note.txt").write_text("x", encoding="utf-8")
+        self.assertEqual(list_index_images(catalog), [first, second])
+        legacy = legacy_catalog(Path(tempfile.mkdtemp()))
+        self.assertEqual(list_index_images(legacy), [])
 
     def test_missing_index_and_unknown_setting(self) -> None:
         catalog = create_catalog(Path(tempfile.mkdtemp()) / "wedding")

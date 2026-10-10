@@ -128,12 +128,28 @@ class LightroomShellTests(unittest.TestCase):
             window.panels["library"]._cancel_load()
             window.close()
 
+    def test_library_grid_lists_catalog_index_images(self) -> None:
+        from src.catalog.index_images import write_index_image
+        from src.ui.panels.library_browser_panel import LibraryBrowserPanel
+        catalog = sample_catalog()
+        panel = LibraryBrowserPanel()
+        panel.show_catalog(catalog)
+        self.assertEqual(panel.grid.images, [])
+        image = write_index_image(catalog, 3, b"jpeg")
+        panel.show_catalog(catalog)
+        self.assertEqual(panel.grid.images, [image])
+        panel.show_catalog(sample_catalog())
+        self.assertEqual(panel.grid.images, [])
+        panel._cancel_load()
+        panel.close()
+
     def test_launch_opens_the_planned_catalog(self) -> None:
         from src.ui.main_window import MainWindow
         catalog = sample_catalog()
         with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("open", catalog)):
             window = MainWindow()
             self.assertEqual(window.catalog_path, catalog)
+            self.assertEqual(window.panels["library"].grid.images, [])
             window.panels["library"]._cancel_load()
             window.close()
 
