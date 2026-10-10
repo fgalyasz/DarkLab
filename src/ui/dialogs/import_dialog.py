@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 from src.config.config_manager import ConfigManager
 from src.ui.import_summary import byte_total, import_status_text
 from src.importing.discover import discover_images
-from src.importing.originals import import_originals
+from src.importing.originals import import_originals, is_duplicate
 from src.importing.transfer import copy_original, move_original
 from src.ui.themes import StyleSheet
 from src.ui.widgets.collapsible_section import CollapsibleSection
@@ -357,6 +357,7 @@ class ImportDialog(QDialog):
         self._import_mode = "import"
         self._mode_buttons: dict[str, QPushButton] = {}
         self._bound_catalog: Path | None = None
+        self._allow_duplicates = False
 
         # Threading
         self.discovery_thread: Optional[ImageDiscoveryThread] = None
@@ -484,6 +485,7 @@ class ImportDialog(QDialog):
     def _add_import_status(self, row: QHBoxLayout) -> None:
         self.import_status_label = QLabel("0 photos / 0 bytes")
         row.addWidget(self.import_status_label)
+        row.addWidget(self._duplicate_checkbox())
         row.addWidget(self._plain_button("Check All", self._select_all_images))
         row.addWidget(self._plain_button("Uncheck All", self._clear_selected_images))
         self.progress_bar = QProgressBar()
@@ -565,6 +567,21 @@ class ImportDialog(QDialog):
     def bind_catalog(self, catalog: Path | None) -> None:
         self._bound_catalog = catalog
 
+    def _duplicate_checkbox(self) -> QCheckBox:
+        box = QCheckBox("Import duplicates as new photos")
+        box.setChecked(False)
+        box.toggled.connect(self._set_allow_duplicates)
+        self.duplicate_box = box
+        return box
+
+    def _set_allow_duplicates(self, checked: bool) -> None:
+        self._allow_duplicates = checked
+
+    def _skip_duplicate(self, source: Path) -> bool:
+        if self._allow_duplicates or self._bound_catalog is None:
+            return False
+        return is_duplicate(self._bound_catalog, source)
+
     def _commit_label(self) -> str:
         if self._import_mode == "add":
             return "Add"
@@ -589,7 +606,7 @@ class ImportDialog(QDialog):
         total = len(self.selected_images)
         done = 0
         for path in list(self.selected_images):
-            done += import_originals(self._bound_catalog, [path])
+            done += import_originals(self._bound_catalog, [path], self._allow_duplicates)
             self._show_add_progress(done, total)
 
     def _show_add_progress(self, done: int, total: int) -> None:
@@ -607,7 +624,7 @@ class ImportDialog(QDialog):
     def _record_originals(self, paths: list[Path]) -> int:
         if self._bound_catalog is None:
             raise ValueError("Open a catalog before importing.")
-        return import_originals(self._bound_catalog, list(paths))
+        return import_originals(self._bound_catalog, list(paths), self._allow_duplicates)
 
     def _record_original(self, path: Path) -> None:
         self._record_originals([path])
@@ -2127,6 +2144,10 @@ class ImportDialog(QDialog):
             for sequence_number, source_path in enumerate(list(self.selected_images), start=1):
                 if self.import_cancel_requested:
                     break
+                if self._skip_duplicate(source_path):
+                    self.import_status_label.setText(f"Skipped duplicate: {source_path.name}")
+                    QApplication.processEvents()
+                    continue
 
                 target_file_path = self._build_import_target_path(
                     source_path, target_path, sequence_number,

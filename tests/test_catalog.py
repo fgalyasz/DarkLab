@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from src.catalog.database import (
-    create_catalog, open_catalog, original_paths, read_schema,
+    _ignore_duplicate_column, create_catalog, open_catalog, original_paths, read_schema,
 )
 from src.catalog.locations import database_file
 from src.catalog.session import catalog_to_reopen, remember_catalog
@@ -29,6 +29,10 @@ def insert_original(path: Path, original: str) -> None:
 
 
 class CatalogTests(unittest.TestCase):
+    def test_schema_errors_other_than_a_duplicate_column_are_raised(self) -> None:
+        error = sqlite3.OperationalError("disk I/O error")
+        with self.assertRaises(sqlite3.OperationalError):
+            _ignore_duplicate_column(error)
     def test_create_adds_suffix_and_schema(self) -> None:
         folder = Path(tempfile.mkdtemp())
         created = create_catalog(folder / "nested" / "wedding")

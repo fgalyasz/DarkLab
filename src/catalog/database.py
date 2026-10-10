@@ -7,7 +7,11 @@ from src.catalog.locations import database_file, prepare_package
 
 META_TABLE = "CREATE TABLE IF NOT EXISTS catalog_meta (key TEXT PRIMARY KEY, value TEXT)"
 META_ROW = "INSERT OR IGNORE INTO catalog_meta (key, value) VALUES ('schema', '2')"
-PHOTO_TABLE = "CREATE TABLE IF NOT EXISTS photos (id INTEGER PRIMARY KEY, original_path TEXT)"
+PHOTO_TABLE = (
+    "CREATE TABLE IF NOT EXISTS photos "
+    "(id INTEGER PRIMARY KEY, original_path TEXT, content_hash TEXT)"
+)
+ADD_HASH = "ALTER TABLE photos ADD COLUMN content_hash TEXT"
 FOLDERS_TABLE = (
     "CREATE TABLE IF NOT EXISTS folders "
     "(id INTEGER PRIMARY KEY, folder_path TEXT NOT NULL UNIQUE)"
@@ -35,6 +39,7 @@ def apply_schema(path: Path) -> None:
     connection = sqlite3.connect(path)
     try:
         _create_tables(connection)
+        _ensure_hash_column(connection)
     finally:
         connection.close()
 
@@ -45,6 +50,20 @@ def _create_tables(connection: sqlite3.Connection) -> None:
     connection.execute(PHOTO_TABLE)
     connection.execute(FOLDERS_TABLE)
     connection.commit()
+
+
+def _ensure_hash_column(connection: sqlite3.Connection) -> None:
+    try:
+        connection.execute(ADD_HASH)
+        connection.commit()
+    except sqlite3.OperationalError as error:
+        connection.rollback()
+        _ignore_duplicate_column(error)
+
+
+def _ignore_duplicate_column(error: sqlite3.OperationalError) -> None:
+    if "duplicate column" not in str(error):
+        raise error
 
 
 def open_catalog(path: Path) -> Path:
