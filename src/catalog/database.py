@@ -3,9 +3,15 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from src.catalog.locations import database_file, prepare_package
+
 META_TABLE = "CREATE TABLE IF NOT EXISTS catalog_meta (key TEXT PRIMARY KEY, value TEXT)"
-META_ROW = "INSERT OR IGNORE INTO catalog_meta (key, value) VALUES ('schema', '1')"
+META_ROW = "INSERT OR IGNORE INTO catalog_meta (key, value) VALUES ('schema', '2')"
 PHOTO_TABLE = "CREATE TABLE IF NOT EXISTS photos (id INTEGER PRIMARY KEY, original_path TEXT)"
+FOLDERS_TABLE = (
+    "CREATE TABLE IF NOT EXISTS folders "
+    "(id INTEGER PRIMARY KEY, folder_path TEXT NOT NULL UNIQUE)"
+)
 SCHEMA_QUERY = "SELECT value FROM catalog_meta WHERE key = 'schema'"
 PATH_QUERY = "SELECT original_path FROM photos ORDER BY id"
 
@@ -18,8 +24,10 @@ def with_catalog_suffix(path: Path) -> Path:
 
 def create_catalog(path: Path) -> Path:
     destination = with_catalog_suffix(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    apply_schema(destination)
+    if destination.is_file():
+        return open_catalog(destination)
+    prepare_package(destination)
+    apply_schema(database_file(destination))
     return destination
 
 
@@ -35,6 +43,7 @@ def _create_tables(connection: sqlite3.Connection) -> None:
     connection.execute(META_TABLE)
     connection.execute(META_ROW)
     connection.execute(PHOTO_TABLE)
+    connection.execute(FOLDERS_TABLE)
     connection.commit()
 
 
@@ -45,9 +54,10 @@ def open_catalog(path: Path) -> Path:
 
 
 def read_schema(path: Path) -> str | None:
-    if not path.is_file():
+    database = database_file(path)
+    if not database.is_file():
         raise FileNotFoundError(path)
-    return _schema_row(path)
+    return _schema_row(database)
 
 
 def _schema_row(path: Path) -> str | None:
@@ -69,7 +79,7 @@ def _fetch_schema(path: Path) -> str | None:
 
 
 def original_paths(path: Path) -> list[str]:
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(database_file(path))
     try:
         rows = connection.execute(PATH_QUERY).fetchall()
     finally:

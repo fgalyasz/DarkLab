@@ -45,7 +45,7 @@ def _stored_path(settings: dict[str, str], mode: str) -> Path | None:
 
 def fixed_catalog_error(path: str) -> str | None:
     if path.strip() == "":
-        return "Choose a catalog file."
+        return "Choose a catalog."
     if _stored_path({"fixed_catalog": path.strip()}, FIXED) is None:
-        return "That catalog file does not exist."
+        return "That catalog does not exist."
     return None

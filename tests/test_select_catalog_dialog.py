@@ -38,7 +38,7 @@ class SelectCatalogDialogTests(unittest.TestCase):
 
     def test_cancelled_file_dialog_stays_open(self) -> None:
         dialog = SelectCatalogDialog()
-        with patch.object(QFileDialog, "getOpenFileName", return_value=("", "")):
+        with patch.object(QFileDialog, "getExistingDirectory", return_value=""):
             dialog._open_existing()
         self.assertIsNone(dialog._chosen)
 

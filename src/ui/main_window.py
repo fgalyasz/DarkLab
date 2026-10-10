@@ -233,8 +233,7 @@ class MainWindow(QMainWindow):
         return selected
 
     def _choose_open_path(self) -> str:
-        selected, _chosen = QFileDialog.getOpenFileName(self, "Open Catalog", "", CATALOG_FILTER)
-        return selected
+        return QFileDialog.getExistingDirectory(self, "Open Catalog", "")
 
     def _use_catalog(self, path: Path) -> None:
         self.catalog_path = path

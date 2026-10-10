@@ -55,8 +55,8 @@ class StartupPolicyTests(unittest.TestCase):
         self.assertEqual(plan_startup(settings), ("ask", None))
 
     def test_fixed_path_must_exist(self) -> None:
-        self.assertEqual(fixed_catalog_error(""), "Choose a catalog file.")
-        self.assertEqual(fixed_catalog_error("/missing.darklab"), "That catalog file does not exist.")
+        self.assertEqual(fixed_catalog_error(""), "Choose a catalog.")
+        self.assertEqual(fixed_catalog_error("/missing.darklab"), "That catalog does not exist.")
         catalog = self._catalog("wedding")
         self.assertIsNone(fixed_catalog_error(str(catalog)))
 

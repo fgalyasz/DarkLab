@@ -6,6 +6,7 @@ from pathlib import Path
 from src.catalog.database import (
     create_catalog, open_catalog, original_paths, read_schema,
 )
+from src.catalog.locations import database_file
 from src.catalog.session import catalog_to_reopen, remember_catalog
 
 
@@ -19,7 +20,7 @@ def execute_statement(path: Path, statement: str) -> None:
 
 
 def insert_original(path: Path, original: str) -> None:
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(database_file(path))
     try:
         connection.execute("INSERT INTO photos (original_path) VALUES (?)", (original,))
         connection.commit()
@@ -32,8 +33,9 @@ class CatalogTests(unittest.TestCase):
         folder = Path(tempfile.mkdtemp())
         created = create_catalog(folder / "nested" / "wedding")
         self.assertEqual(created.name, "wedding.darklab")
+        self.assertTrue(created.is_dir())
         self.assertEqual(open_catalog(created), created)
-        self.assertEqual(read_schema(created), "1")
+        self.assertEqual(read_schema(created), "2")
 
     def test_create_keeps_existing_suffix(self) -> None:
         folder = Path(tempfile.mkdtemp())

@@ -40,15 +40,26 @@ The UI toolkit is PyQt6. The language is Python 3.12 or newer. A native imaging 
 
 Rejected: a Rust or C++ rewrite before a Catalog exists. Recorded in the PRD addendum.
 
-### ADR-2 — One SQLite file is the Catalog
+### ADR-2 — One folder is the Catalog
 
-Path: the Photographer picks the `.darklab` file, which is a SQLite database. Tables hold Photos, Folders, Collections, Keywords, History Steps, and Develop Settings. Previews live in a sibling directory named `<catalog>.previews/` and are disposable.
+The Photographer picks a `.darklab` folder:
+
+```text
+Name.darklab/
+  catalog.sqlite
+  previews/
+  settings.json
+```
+
+`catalog.sqlite` holds Photos, imported folder paths, and, as those stories land, Collections, Keywords, History Steps, and Develop Settings. `previews/` holds index images and is disposable. `settings.json` holds settings that belong to that Catalog. Startup Mode, the recent path, and the pin stay in the application config (ADR-9): they are needed before a Catalog is open.
+
+A Catalog created as a single `.darklab` file before this decision still opens. New Catalogs are folders. Open does not rewrite the old file into a folder.
 
 WAL mode is on. The UI opens one connection. Writes go through `src/catalog`. Widgets do not import `sqlite3`.
 
 ### ADR-3 — Originals are read-only
 
-No DarkLab code path opens an Original for write. Export and preview write only under the export destination or the preview cache. Tests for FR-21 and FR-37 hash the Original before and after.
+No DarkLab code path opens an Original for write. Export and preview write only under the export destination or the Catalog's `previews/` directory. Tests for FR-21 and FR-37 hash the Original before and after.
 
 Move-import may delete a source only after the destination file exists and its size matches (FR-5). That is the one intentional delete, and it deletes the source path the Photographer chose to move, not a file that was already a Catalog Original elsewhere.
 

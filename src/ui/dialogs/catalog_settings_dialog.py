@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
 )
 
 from src.catalog.startup_policy import ASK, FIXED, RECENT, fixed_catalog_error, normalize_mode
-from src.ui.catalog_filter import CATALOG_FILTER
 
 
 class CatalogSettingsDialog(QDialog):
@@ -90,7 +89,7 @@ class CatalogSettingsDialog(QDialog):
         self._browse.setEnabled(enabled)
 
     def _browse_catalog(self) -> None:
-        selected, _chosen = QFileDialog.getOpenFileName(self, "Catalog", self._path.text(), CATALOG_FILTER)
+        selected = QFileDialog.getExistingDirectory(self, "Catalog", self._path.text())
         if selected == "":
             return
         self._path.setText(selected)

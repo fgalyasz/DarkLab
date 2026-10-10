@@ -44,7 +44,7 @@ class SelectCatalogDialog(QDialog):
         row.addWidget(button)
 
     def _open_existing(self) -> None:
-        selected, _chosen = QFileDialog.getOpenFileName(self, "Open Catalog", "", CATALOG_FILTER)
+        selected = QFileDialog.getExistingDirectory(self, "Open Catalog", "")
         if selected == "":
             return
         self._try_open(Path(selected))

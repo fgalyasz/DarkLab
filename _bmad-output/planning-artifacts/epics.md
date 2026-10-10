@@ -73,13 +73,17 @@ Fast path, 2026-10-10. Epic order follows the thesis: finish one shoot, then org
 - FR-48 Choose a Startup Mode
 - FR-49 Pin a Catalog
 - FR-50 A Catalog is required
+- FR-51 One Catalog folder
+- FR-52 Imported folder paths
+- FR-53 Index images
+- FR-54 Catalog settings
 
 ### NonFunctional Requirements
 
 - NFR-1 Cached basic-tone Preview updates within 100 ms — Epic 3
 - NFR-2 Import of 500 JPEGs by Add stays off the UI thread — Epic 1
 - NFR-3 Shoot path works with the network off — Epics 1–4
-- NFR-4 One SQLite Catalog and a disposable preview cache — Epic 1
+- NFR-4 One SQLite database inside the Catalog folder, and a disposable preview cache — Epic 13
 - NFR-5 Same source on macOS, Windows, and Linux — all epics, no platform-only MVP feature
 - NFR-6 No account and no telemetry — all epics
 - NFR-7 4.5:1 text contrast on the dark theme — Epic 2, when the Library labels are set
@@ -148,6 +152,10 @@ No UX document. Stories use the Module names from the PRD glossary.
 - FR-48 Epic 11
 - FR-49 Epic 11
 - FR-50 Epic 12
+- FR-51 Epic 13
+- FR-52 Epic 13
+- FR-53 Epic 13
+- FR-54 Epic 13
 
 ## Epic List
 
@@ -163,6 +171,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 10. People — confirm faces when a detector exists
 11. Catalog startup — ask, reopen the last Catalog, or open a pinned Catalog
 12. Catalog required — the workspace opens only after a Catalog is current
+13. Catalog package — one folder holds imported folders, index images, and that Catalog's settings
 
 ## Epic 1: Catalog and Import
 
@@ -884,3 +893,45 @@ So that I never edit in an empty window that has nowhere to put Photos.
 **Given** the file chooser
 **When** it is cancelled
 **Then** Select Catalog stays open
+
+## Epic 13: Catalog package
+
+A Photographer can copy one Catalog folder and keep its imported folders, index images, and settings.
+
+### Story 13.1: Store the Catalog in one folder
+
+As a Photographer,
+I want one Catalog folder to hold imported folders, index images, and that Catalog's settings,
+So that copying the folder takes the shoot's DarkLab state with it.
+
+**Acceptance Criteria:**
+
+**Given** a new Catalog
+**When** it is created
+**Then** the path is a folder whose name ends in `.darklab`
+**And** it contains the database, a preview directory, and a settings file
+**And** creating it again does not remove what was stored
+
+**Given** a folder path
+**When** it is recorded
+**Then** that path is listed once
+**And** an empty path is refused
+**And** another Catalog does not list it
+
+**Given** index-image bytes for a Photo
+**When** they are stored
+**Then** they are read back from the preview directory
+**And** removing that directory leaves the Catalog, its folders, and its settings usable
+
+**Given** a Catalog setting
+**When** it is saved
+**Then** it is read back from that Catalog only
+**And** invalid settings JSON is refused
+
+**Given** a Catalog created earlier as a single database file
+**When** it is opened
+**Then** it still opens
+
+**Given** Startup Mode
+**When** a Catalog setting is saved
+**Then** Startup Mode stays in the application config

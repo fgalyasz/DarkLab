@@ -77,7 +77,7 @@ DarkLab does not promise to be Adobe. It will not read a Lightroom catalog, ship
 ## 3. Glossary
 
 - **Photographer** — The person using DarkLab. One person per Catalog session.
-- **Catalog** — The local database of Photos, organization, and Develop Settings. One Catalog is one SQLite file plus its preview cache and backups.
+- **Catalog** — The local database of Photos, organization, and Develop Settings. One Catalog is one folder: the database, the preview cache, and that Catalog's settings. What the folder holds is FR-51 through FR-54 in `prd-DarkLab-catalog-package`.
 - **Photo** — A Catalog record that points at one Original and holds Develop Settings, Metadata, and organization. A Photo is not the file.
 - **Original** — The image file on disk that a Photo references. Develop and Export do not write pixels into it.
 - **Develop Settings** — The non-destructive instruction set for one Photo or Virtual Copy.
@@ -121,7 +121,7 @@ DarkLab does not promise to be Adobe. It will not read a Lightroom catalog, ship
 The Photographer can create a Catalog, open an existing Catalog, and switch Catalogs. Develop Settings and organization from the opened Catalog come back as they were saved.
 
 **Consequences (testable):**
-- Creating a Catalog produces one SQLite file the Photographer can copy to another disk.
+- Creating a Catalog produces one folder the Photographer can copy to another disk. The folder's contents are FR-51 through FR-54 in `prd-DarkLab-catalog-package`.
 - Quitting and reopening restores the last Folder, filter, and selected Photo.
 - Switching Catalogs does not merge Photos between them.
 - Startup choice is FR-48, FR-49, and FR-50 in `prd-DarkLab-catalog-startup`. The workspace requires a Catalog.
@@ -639,7 +639,7 @@ The first public milestone is UJ-1 through UJ-4. It is an experience slice: one 
 - **NFR-1:** After a Preview is cached, a basic-tone slider on a 24-megapixel Photo updates that Preview within 100 ms on an Apple M1 or a 2020 Intel laptop with 16 GB of RAM. Validates the Develop loop in FR-23.
 - **NFR-2:** Import of 500 JPEGs by Add does not block the UI thread. Progress shows the count completed. Validates FR-5 and FR-7.
 - **NFR-3:** Import, Library, Develop, and Export function with the network disabled. Validates the local-first promise. Map may show an offline empty state.
-- **NFR-4:** The Catalog database is one SQLite file. Previews are a cache that can be deleted and rebuilt.
+- **NFR-4:** The Catalog database is one SQLite file inside the Catalog folder. Previews are a cache inside that folder and can be deleted and rebuilt. See FR-51 and FR-53.
 - **NFR-5:** The same source builds and runs on macOS, Windows, and Linux. A platform-specific feature is off by default rather than breaking the others.
 - **NFR-6:** No account, no telemetry, and no phone-home check is required to Import, edit, or Export.
 - **NFR-7:** Text on the dark theme meets a 4.5:1 contrast ratio against its background for body labels.

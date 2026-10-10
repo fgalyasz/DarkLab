@@ -34,7 +34,7 @@ class CatalogSettingsDialogTests(unittest.TestCase):
         dialog = CatalogSettingsDialog({"startup_mode": FIXED})
         dialog._accept_if_valid()
         self.assertNotEqual(dialog.result(), QDialog.DialogCode.Accepted)
-        self.assertEqual(dialog._error.text(), "Choose a catalog file.")
+        self.assertEqual(dialog._error.text(), "Choose a catalog.")
 
     def test_fixed_saves_an_existing_file(self) -> None:
         catalog = create_catalog(Path(tempfile.mkdtemp()) / "wedding")
@@ -45,13 +45,13 @@ class CatalogSettingsDialogTests(unittest.TestCase):
 
     def test_browse_cancel_leaves_recent(self) -> None:
         dialog = CatalogSettingsDialog({})
-        with patch.object(QFileDialog, "getOpenFileName", return_value=("", "")):
+        with patch.object(QFileDialog, "getExistingDirectory", return_value=""):
             dialog._browse_catalog()
         self.assertEqual(dialog.chosen_mode(), RECENT)
 
     def test_browse_selects_fixed_mode(self) -> None:
         dialog = CatalogSettingsDialog({})
-        with patch.object(QFileDialog, "getOpenFileName", return_value=("/tmp/wedding.darklab", "")):
+        with patch.object(QFileDialog, "getExistingDirectory", return_value="/tmp/wedding.darklab"):
             dialog._browse_catalog()
         self.assertTrue(dialog._fixed.isChecked())
         self.assertEqual(dialog._path.text(), "/tmp/wedding.darklab")
