@@ -124,6 +124,7 @@ The Photographer can create a Catalog, open an existing Catalog, and switch Cata
 - Creating a Catalog produces one SQLite file the Photographer can copy to another disk.
 - Quitting and reopening restores the last Folder, filter, and selected Photo.
 - Switching Catalogs does not merge Photos between them.
+- Startup choice is FR-48 and FR-49 in `prd-DarkLab-catalog-startup`.
 
 #### FR-2: Original references
 

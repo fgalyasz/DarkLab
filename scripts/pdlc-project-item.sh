@@ -39,6 +39,11 @@ else
   url="https://github.com/${repo}/issues/${raw}"
 fi
 
-gh project item-add "${project_number}" --owner "${owner}" --url "${url}" >/dev/null
+add_output="$(gh project item-add "${project_number}" --owner "${owner}" --url "${url}" 2>&1)" || {
+  if [[ "${add_output}" != *"already exists"* ]]; then
+    echo "${add_output}" >&2
+    exit 1
+  fi
+}
 gh project item-edit "${project_number}" --owner "${owner}" --url "${url}" --field Status --value "${status}" >/dev/null
 echo "Project ${project_number}: ${url} -> ${status}"

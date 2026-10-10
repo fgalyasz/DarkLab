@@ -124,8 +124,27 @@ class LightroomShellTests(unittest.TestCase):
             titles = [action.text() for action in window.menuBar().actions()[0].menu().actions()]
             self.assertIn("New &Catalog...", titles)
             self.assertIn("&Open Catalog...", titles)
+            self.assertIn("Catalog &Settings...", titles)
             window.panels["library"]._cancel_load()
             window.close()
+
+    def test_launch_opens_the_planned_catalog(self) -> None:
+        from src.ui.main_window import MainWindow
+        catalog = sample_catalog()
+        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("open", catalog)):
+            window = MainWindow()
+            self.assertEqual(window.catalog_path, catalog)
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_launch_asks_when_the_policy_says_ask(self) -> None:
+        from src.ui.main_window import MainWindow
+        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("ask", None)):
+            with patch.object(MainWindow, "_open_catalog_dialog") as ask:
+                window = MainWindow()
+                ask.assert_called_once()
+                window.panels["library"]._cancel_load()
+                window.close()
 
     def test_panel_header_collapses_and_expands(self) -> None:
         from PyQt6.QtCore import Qt
@@ -158,6 +177,11 @@ class LightroomShellTests(unittest.TestCase):
         dialog.close()
 
 
+def sample_catalog() -> Path:
+    from src.catalog.database import create_catalog
+    return create_catalog(Path(tempfile.mkdtemp()) / "wedding")
+
+
 def isolated_config() -> ExitStack:
     stack = ExitStack()
     stack.enter_context(patch("src.ui.main_window.ConfigManager.get_current_panel", return_value="library"))
@@ -165,7 +189,14 @@ def isolated_config() -> ExitStack:
     stack.enter_context(patch("src.ui.main_window.ConfigManager.set_window_geometry"))
     stack.enter_context(patch("src.ui.main_window.ConfigManager.set"))
     stack.enter_context(patch("src.ui.main_window.ConfigManager.get_window_geometry", return_value=None))
+    stack.enter_context(patch("src.ui.main_window.ConfigManager.get", side_effect=config_get))
     return stack
+
+
+def config_get(key: str, default: object = None) -> object:
+    if key == "window.maximized":
+        return False
+    return default
 
 
 if __name__ == "__main__":

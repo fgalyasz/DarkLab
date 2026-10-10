@@ -70,6 +70,8 @@ Fast path, 2026-10-10. Epic order follows the thesis: finish one shoot, then org
 - FR-45 Print to printer and JPEG
 - FR-46 Static web gallery
 - FR-47 Face confirmation
+- FR-48 Choose a Startup Mode
+- FR-49 Pin a Catalog
 
 ### NonFunctional Requirements
 
@@ -142,6 +144,8 @@ No UX document. Stories use the Module names from the PRD glossary.
 - FR-45 Epic 8
 - FR-46 Epic 9
 - FR-47 Epic 10
+- FR-48 Epic 11
+- FR-49 Epic 11
 
 ## Epic List
 
@@ -155,6 +159,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 8. Print and Slideshow — contact sheet and playback
 9. Book and Web — PDF book and a static gallery
 10. People — confirm faces when a detector exists
+11. Catalog startup — ask, reopen the last Catalog, or open a pinned Catalog
 
 ## Epic 1: Catalog and Import
 
@@ -801,3 +806,53 @@ So that a person filter is something I said, not something a model guessed.
 **Given** a rejected suggestion
 **When** the same Photo is scanned again
 **Then** that suggestion is not offered again for that Photo
+
+## Epic 11: Catalog startup
+
+A Photographer can decide which Catalog the next launch opens.
+
+### Story 11.1: Save the startup choice
+
+As a Photographer,
+I want to choose ask, the most recent Catalog, or one pinned Catalog,
+So that the next launch is the one I meant.
+
+**Acceptance Criteria:**
+
+**Given** Catalog Settings
+**When** Ask is saved
+**Then** the choice is still Ask after a restart
+
+**Given** fixed mode and no existing file
+**When** the Photographer confirms
+**Then** the previous setting stays in place
+
+**Given** a pinned Catalog
+**When** a different Catalog is opened
+**Then** the pinned path is unchanged
+
+### Story 11.2: Launch follows the startup choice
+
+As a Photographer,
+I want the next launch to follow Catalog Settings,
+So that I am asked, returned to the last Catalog, or returned to the pin.
+
+**Acceptance Criteria:**
+
+**Given** Ask
+**When** DarkLab launches
+**Then** the Open Catalog window is shown
+**And** cancel leaves no Catalog current
+
+**Given** recent mode and an existing last Catalog
+**When** DarkLab launches
+**Then** that Catalog is current
+**And** a missing last Catalog does not show the Open Catalog window
+
+**Given** a pinned file that exists
+**When** DarkLab launches
+**Then** that file is current even if a different Catalog was opened last
+
+**Given** a pinned file that is missing
+**When** DarkLab launches
+**Then** the Open Catalog window is shown

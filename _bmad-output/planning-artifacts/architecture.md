@@ -72,6 +72,10 @@ Import copies and preview renders run off the UI thread. The widget receives pro
 
 Import, Library, Develop, and Export do not open sockets. Map is the exception and must tolerate failure.
 
+### ADR-9 — Startup policy stays out of the widget
+
+`src/catalog/startup_policy.py` chooses ask, recent, or fixed. The Catalog Settings dialog collects the choice and does not decide what launch should do. Config keys are `catalog.startup_mode`, `catalog.path`, and `catalog.fixed_path`. A missing recent Catalog does not open a dialog. A missing pinned Catalog does. Opening a Catalog updates `catalog.path` only.
+
 ## Patterns
 
 - A widget calls a service in `src/catalog`, `src/importing`, `src/develop`, or `src/exporting`.

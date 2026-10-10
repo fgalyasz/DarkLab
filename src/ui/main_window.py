@@ -6,14 +6,14 @@ Handles the main UI layout and panel management
 import logging
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QFileDialog, QMainWindow, QMenu, QMenuBar, QMessageBox,
+    QDialog, QFileDialog, QMainWindow, QMenu, QMenuBar, QMessageBox,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from src.catalog.database import create_catalog, open_catalog
-from src.catalog.session import catalog_to_reopen
+from src.catalog.startup_policy import plan_startup
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
@@ -23,10 +23,16 @@ from src.ui.panels.book_panel import BookPanel
 from src.ui.panels.print_panel import PrintPanel
 from src.ui.panels.slideshow_panel import SlideshowPanel
 from src.ui.panels.website_panel import WebsitePanel
+from src.ui.catalog_filter import CATALOG_FILTER
 from src.ui.dialogs import ImportDialog
+from src.ui.dialogs.catalog_settings_dialog import CatalogSettingsDialog
 from src.ui.widgets.module_bar import ModuleBar
 
-CATALOG_FILTER = "DarkLab Catalog (*.darklab)"
+
+def _text_setting(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
 
 
 def _selected_path(selected: str) -> Path | None:
@@ -191,6 +197,8 @@ class MainWindow(QMainWindow):
         new_catalog.triggered.connect(self._create_catalog)
         open_action = file_menu.addAction("&Open Catalog...")
         open_action.triggered.connect(self._open_catalog_dialog)
+        settings_action = file_menu.addAction("Catalog &Settings...")
+        settings_action.triggered.connect(self._edit_catalog_settings)
         file_menu.addSeparator()
 
     def _create_catalog(self) -> None:
@@ -232,18 +240,34 @@ class MainWindow(QMainWindow):
         self.config_manager.set("catalog.path", str(path))
         self.setWindowTitle(f"{path.stem} - DarkLab")
 
-    def _restore_catalog(self) -> None:
-        path = catalog_to_reopen(self._catalog_settings())
-        if path is None:
+    def _edit_catalog_settings(self) -> None:
+        dialog = CatalogSettingsDialog(self._catalog_settings(), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
+        self._store_startup(dialog)
+
+    def _store_startup(self, dialog: CatalogSettingsDialog) -> None:
+        self.config_manager.set("catalog.startup_mode", dialog.chosen_mode())
+        self.config_manager.set("catalog.fixed_path", dialog.chosen_fixed_path())
+
+    def _restore_catalog(self) -> None:
+        action, path = plan_startup(self._catalog_settings())
+        if action == "open" and path is not None:
+            self._show_open_catalog(path)
+            return
+        if action == "ask":
+            self._open_catalog_dialog()
+
+    def _show_open_catalog(self, path: Path) -> None:
         self.catalog_path = path
         self.setWindowTitle(f"{path.stem} - DarkLab")
 
     def _catalog_settings(self) -> dict[str, str]:
-        stored = self.config_manager.get("catalog.path", "")
-        if not isinstance(stored, str) or stored == "":
-            return {}
-        return {"catalog_path": stored}
+        return {
+            "startup_mode": _text_setting(self.config_manager.get("catalog.startup_mode", "")),
+            "catalog_path": _text_setting(self.config_manager.get("catalog.path", "")),
+            "fixed_catalog": _text_setting(self.config_manager.get("catalog.fixed_path", "")),
+        }
 
     def _open_import_dialog(self) -> None:
         """Open the Import dialog"""
