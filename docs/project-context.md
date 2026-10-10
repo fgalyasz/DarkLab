@@ -33,6 +33,7 @@ DarkLab is a local-first desktop photo application. The product promise is Light
 - PRD: `_bmad-output/planning-artifacts/prds/prd-DarkLab-2026-10-10/prd.md`
 - Architecture: `_bmad-output/planning-artifacts/architecture.md`
 - Epics: `_bmad-output/planning-artifacts/epics.md`
+- Board: https://github.com/users/fgalyasz/projects/11 (`docs/pdlc/project.json`)
 
 ## Current code on main
 

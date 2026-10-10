@@ -39,6 +39,7 @@ This repo uses the BMad method as the AI-PDLC. Skills run locally in Cursor. The
 - Project context: `docs/project-context.md`
 - Issue templates: `.github/ISSUE_TEMPLATE/`
 - Baseline PRD, architecture, and epics: `_bmad-output/planning-artifacts/`
+- Board: https://github.com/users/fgalyasz/projects/11
 - Board map, written by the seed script: `docs/pdlc/project.json`
 
 If `gh project` returns Forbidden, refresh token scopes: `gh auth refresh -s project`.

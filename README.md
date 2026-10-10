@@ -15,6 +15,7 @@ The promise is that workflow, on a local catalog, without a subscription. It is 
 | Architecture | [`architecture.md`](_bmad-output/planning-artifacts/architecture.md) |
 | Epics | [`epics.md`](_bmad-output/planning-artifacts/epics.md) |
 | Process | [`docs/pdlc.md`](docs/pdlc.md) |
+| Board | [DarkLab project](https://github.com/users/fgalyasz/projects/11) |
 
 The first milestone is one shoot: import, cull, basic develop, export, with original files left unchanged. Collections, the rest of Develop, Map, Book, Slideshow, Print, Web, and people tags are specified and come after that.
 

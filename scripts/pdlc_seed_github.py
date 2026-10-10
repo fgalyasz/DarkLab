@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from src.pdlc.outline import parent_key, parse_outline
 
-ROOT = Path(__file__).resolve().parents[1]
 EPICS = ROOT / "_bmad-output" / "planning-artifacts" / "epics.md"
 META_DIR = ROOT / "docs" / "pdlc"
 PROJECT_PATH = META_DIR / "project.json"
@@ -118,8 +121,25 @@ def issue_number(url: str) -> str:
 def add_to_project(meta: dict[str, str], url: str) -> None:
     number = meta["project_number"]
     owner = meta["owner"]
-    subprocess.run(["gh", "project", "item-add", number, "--owner", owner, "--url", url], check=True)
+    add_item(number, owner, url)
     set_status(number, owner, url)
+
+
+def add_item(number: str, owner: str, url: str) -> None:
+    completed = subprocess.run(
+        ["gh", "project", "item-add", number, "--owner", owner, "--url", url],
+        capture_output=True,
+        text=True,
+    )
+    accept_existing(completed)
+
+
+def accept_existing(completed: subprocess.CompletedProcess[str]) -> None:
+    if completed.returncode == 0:
+        return
+    if "already exists" in completed.stderr:
+        return
+    completed.check_returncode()
 
 
 def set_status(number: str, owner: str, url: str) -> None:
