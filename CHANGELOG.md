@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Importing photographs writes an index image into the open catalog, and the Library grid shows those images when the import dialog closes.
 - A new catalog opens with an empty Library. The grid lists that catalog's index images, and it stays empty until some exist.
 - A catalog is a folder. It records imported folder paths, stores index images, and keeps that catalog's settings. Originals stay on disk. Which catalog opens at launch stays outside the folder.
 - The workspace opens only after a catalog is current. Select Catalog offers Open and New; Quit exits.

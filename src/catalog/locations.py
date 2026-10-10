@@ -20,7 +20,10 @@ def package_root(path: Path) -> Path:
 
 
 def preview_directory(catalog: Path) -> Path:
-    return package_root(catalog) / PREVIEWS_NAME
+    root = package_root(catalog)
+    if root.is_dir() or not root.exists():
+        return root / PREVIEWS_NAME
+    return Path(f"{root}.previews")
 
 
 def settings_file(catalog: Path) -> Path:

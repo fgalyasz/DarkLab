@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 
 from src.config.config_manager import ConfigManager
 from src.ui.import_summary import byte_total, import_status_text
-from src.ui.library_catalog import merge_catalog_paths
+from src.importing.originals import import_originals
 from src.ui.themes import StyleSheet
 from src.ui.widgets.collapsible_section import CollapsibleSection
 from src.ui.widgets.grid_image_widget import GridImageWidget
@@ -365,6 +365,7 @@ class ImportDialog(QDialog):
         self.import_cancel_requested = False
         self._import_mode = "import"
         self._mode_buttons: dict[str, QPushButton] = {}
+        self._bound_catalog: Path | None = None
 
         # Threading
         self.discovery_thread: Optional[ImageDiscoveryThread] = None
@@ -567,13 +568,32 @@ class ImportDialog(QDialog):
         text = import_status_text(len(self.image_files), len(self.selected_images), byte_total(self.image_files))
         self.import_status_label.setText(text)
 
+    def bind_catalog(self, catalog: Path | None) -> None:
+        self._bound_catalog = catalog
+
     def _add_selection_to_catalog(self) -> None:
         if not self.selected_images:
             QMessageBox.information(self, "Add", "Please select at least one image to add.")
             return
-        stored = self.config_manager.get("library.catalog_paths", [])
-        self.config_manager.set("library.catalog_paths", merge_catalog_paths(stored, self.selected_images))
-        self.import_status_label.setText(f"Added {len(self.selected_images)} photos to the catalog.")
+        count = self._recorded_count()
+        if count is None:
+            return
+        self.import_status_label.setText(f"Added {count} photos to the catalog.")
+
+    def _recorded_count(self) -> int | None:
+        try:
+            return self._record_originals(self.selected_images)
+        except ValueError as error:
+            QMessageBox.warning(self, "Add", str(error))
+            return None
+
+    def _record_originals(self, paths: list[Path]) -> int:
+        if self._bound_catalog is None:
+            raise ValueError("Open a catalog before importing.")
+        return import_originals(self._bound_catalog, list(paths))
+
+    def _record_original(self, path: Path) -> None:
+        self._record_originals([path])
 
     def _setup_folder_tree(self, parent: QSplitter) -> None:
         left = QWidget()
@@ -2041,6 +2061,9 @@ class ImportDialog(QDialog):
         if not self.selected_images:
             QMessageBox.information(self, "Import", "Please select at least one image to import.")
             return
+        if self._bound_catalog is None:
+            QMessageBox.warning(self, "Import", "Open a catalog before importing.")
+            return
 
         import_config = self._get_import_config()
         destination_presets = import_config.get(self.DESTINATION_PRESET_LIST_KEY, {})
@@ -2092,6 +2115,7 @@ class ImportDialog(QDialog):
 
                 try:
                     shutil.copy2(source_path, target_file_path)
+                    self._record_original(target_file_path)
                     self._write_target_xmp(source_path, target_file_path)
 
                     # Read existing IPTC data from source image

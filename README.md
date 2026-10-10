@@ -6,7 +6,7 @@ The promise is that workflow, on a local catalog, without a subscription. It is 
 
 ## Status
 
-`main` opens a workspace only after a catalog is current. A catalog is a folder: the database, imported folder paths, index images, and that catalog's settings. The Library grid lists those index images and stays empty until some exist. Launch can ask, reopen the last catalog, or open a pinned one. The window has an import dialog, a Library browser, and a Develop panel shell. Map, Book, Slideshow, Print, and Web are empty modules.
+`main` opens a workspace only after a catalog is current. A catalog is a folder: the database, imported folder paths, index images, and that catalog's settings. The Library grid lists those index images. Import writes one for each photograph, and the grid stays empty until some exist. Launch can ask, reopen the last catalog, or open a pinned one. The window has an import dialog, a Library browser, and a Develop panel shell. Map, Book, Slideshow, Print, and Web are empty modules.
 
 | | |
 | --- | --- |

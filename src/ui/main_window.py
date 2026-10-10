@@ -284,10 +284,16 @@ class MainWindow(QMainWindow):
         }
 
     def _open_import_dialog(self) -> None:
-        """Open the Import dialog"""
         dialog = ImportDialog(self)
+        dialog.bind_catalog(self.catalog_path)
         dialog.exec()
+        self._refresh_open_catalog()
         self.logger.info("Import dialog closed")
+
+    def _refresh_open_catalog(self) -> None:
+        if self.catalog_path is None:
+            return
+        self._show_catalog_photos(self.catalog_path)
     
     def _switch_to_panel(self, panel_id: str) -> None:
         """Switch to specified panel"""

@@ -79,6 +79,7 @@ Fast path, 2026-10-10. Epic order follows the thesis: finish one shoot, then org
 - FR-54 Catalog settings
 - FR-55 A new Catalog shows no Photos
 - FR-56 The Library grid lists Catalog index images
+- FR-57 Import writes index images
 
 ### NonFunctional Requirements
 
@@ -160,6 +161,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 - FR-54 Epic 13
 - FR-55 Epic 14
 - FR-56 Epic 14
+- FR-57 Epic 15
 
 ## Epic List
 
@@ -177,6 +179,7 @@ No UX document. Stories use the Module names from the PRD glossary.
 12. Catalog required — the workspace opens only after a Catalog is current
 13. Catalog package — one folder holds imported folders, index images, and that Catalog's settings
 14. Library grid — the grid lists the open Catalog's index images and stays empty until some exist
+15. Import index images — Import writes an index image for each Photo and the grid shows it
 
 ## Epic 1: Catalog and Import
 
@@ -969,3 +972,29 @@ So that I see only Photos I have imported into that Catalog.
 **Given** a disk folder that contains photographs
 **When** the open Catalog has no index images
 **Then** the Library does not show those photographs
+
+## Epic 15: Import index images
+
+Importing photographs leaves index images the Library can show.
+
+### Story 15.1: Write an index image for each imported Photo
+
+As a Photographer,
+I want Import to put an index image in the open Catalog,
+So that the Library grid shows the photographs I just imported.
+
+**Acceptance Criteria:**
+
+**Given** an open Catalog and selected photographs
+**When** Add or Copy finishes
+**Then** each resulting file has a Photo row and an index image
+**And** importing the same path again does not add a second Photo
+
+**Given** a file that cannot be read
+**When** it is imported with files that can
+**Then** it is skipped
+**And** the readable files still get index images
+
+**Given** the Import dialog closes
+**When** the Library is showing the same Catalog
+**Then** the grid lists the new index images
