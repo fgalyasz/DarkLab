@@ -424,6 +424,7 @@ class ImportDialog(QDialog):
 
     def _build_import_top_bar(self) -> QWidget:
         bar = QWidget()
+        bar.setObjectName("importTopBar")
         bar.setFixedHeight(52)
         row = QHBoxLayout(bar)
         row.setContentsMargins(10, 4, 12, 4)
@@ -496,12 +497,12 @@ class ImportDialog(QDialog):
         if hasattr(self, "culling_bar"):
             self.culling_bar.setVisible(mode == "culling")
         self._show_add_hint(mode)
-        self._show_destination_section(mode)
         if self.import_button is not None:
             self.import_button.setText(self._commit_label())
 
     def _build_import_bottom_bar(self) -> QWidget:
         bar = QWidget()
+        bar.setObjectName("importBottomBar")
         row = QHBoxLayout(bar)
         row.setContentsMargins(8, 6, 8, 6)
         self._add_import_status(row)
@@ -661,6 +662,7 @@ class ImportDialog(QDialog):
 
     def _setup_folder_tree(self, parent: QSplitter) -> None:
         left = QWidget()
+        left.setObjectName("importSource")
         left.setMinimumWidth(220)
         layout = QVBoxLayout(left)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -686,6 +688,7 @@ class ImportDialog(QDialog):
 
     def _setup_image_grid(self, parent: QSplitter) -> None:
         middle = QWidget()
+        middle.setObjectName("importStage")
         layout = QVBoxLayout(middle)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -745,7 +748,8 @@ class ImportDialog(QDialog):
 
     def _setup_import_settings(self, parent: QSplitter) -> None:
         right = QWidget()
-        right.setMinimumWidth(260)
+        right.setObjectName("importSide")
+        right.setMinimumWidth(300)
         layout = QVBoxLayout(right)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -1209,25 +1213,47 @@ class ImportDialog(QDialog):
     # ===== Import Settings Methods =====
 
     def _render_import_sections(self, parent_layout: QVBoxLayout) -> None:
-        self.destination_section = CollapsibleSection("Destination", self._destination_panel())
+        parent_layout.setContentsMargins(8, 8, 8, 8)
+        parent_layout.setSpacing(10)
+        parent_layout.addWidget(self._shaded_block("File Renaming", self._create_file_renaming_widget()))
+        parent_layout.addWidget(self._shaded_block("Metadata", self._create_iptc_widget()))
+        self.destination_section = self._shaded_block("Destination", self._destination_panel())
         parent_layout.addWidget(self.destination_section)
         parent_layout.addStretch()
+
+    def _shaded_block(self, title: str, body: QWidget) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("importBlock")
+        column = QVBoxLayout(frame)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        heading = QLabel(title)
+        heading.setObjectName("importBlockTitle")
+        body.setObjectName("importBlockBody")
+        column.addWidget(heading)
+        column.addWidget(body)
+        return frame
 
     def _destination_panel(self) -> QWidget:
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
-        layout.addWidget(QLabel("Copy and Move place the files in this folder."))
+        layout.addLayout(self._destination_preset_row())
         self.destination_path = QLineEdit()
         self.destination_path.setReadOnly(True)
         layout.addWidget(self.destination_path)
         layout.addWidget(self._plain_button("Choose Folder", self._choose_destination_folder))
         return panel
 
-    def _show_destination_section(self, mode: str) -> None:
-        if hasattr(self, "destination_section"):
-            self.destination_section.setVisible(mode in {"import", "move"})
+    def _destination_preset_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Preset"))
+        self.destination_preset_label = QLabel(self.DEFAULT_DESTINATION_PRESET_NAME)
+        row.addWidget(self.destination_preset_label)
+        row.addStretch()
+        row.addWidget(self._create_small_button("Configure...", self._open_destination_dialog))
+        return row
 
     def _choose_destination_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Destination Folder", self.destination_path.text())
@@ -1241,15 +1267,22 @@ class ImportDialog(QDialog):
         self._save_import_config(import_config)
 
     def _write_destination(self, import_config: dict[str, object], folder: str) -> None:
-        preset = self._blank_destination()
+        name = str(import_config.get(self.DESTINATION_PRESET_ACTIVE_KEY, self.DEFAULT_DESTINATION_PRESET_NAME))
+        presets = self._kept_destination_presets(import_config)
+        preset = dict(presets.get(name, self._blank_destination()))
         preset["target_root"] = folder
-        name = self.DEFAULT_DESTINATION_PRESET_NAME
-        import_config[self.DESTINATION_PRESET_LIST_KEY] = {name: preset}
+        presets[name] = preset
+        import_config[self.DESTINATION_PRESET_LIST_KEY] = presets
         import_config[self.DESTINATION_PRESET_ACTIVE_KEY] = name
         settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
         settings["target_root"] = folder
-        settings["organize_mode"] = "one_folder"
         import_config[self.IMPORT_SETTINGS_KEY] = settings
+
+    def _kept_destination_presets(self, import_config: dict[str, object]) -> dict[str, object]:
+        presets = import_config.get(self.DESTINATION_PRESET_LIST_KEY)
+        if isinstance(presets, dict):
+            return dict(presets)
+        return {}
 
     def _blank_destination(self) -> dict[str, object]:
         return {
@@ -1421,7 +1454,6 @@ class ImportDialog(QDialog):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
-        layout.addLayout(self._develop_settings_row())
 
         # Preset selector row
         preset_layout = QHBoxLayout()
@@ -1712,6 +1744,7 @@ class ImportDialog(QDialog):
     def _load_import_settings_into_ui(self) -> None:
         """Load settings into UI - always use Default preset on dialog open"""
         if self.preset_combo is None:
+            self._refresh_import_blocks()
             return
 
         import_config = self._get_import_config()
@@ -2041,12 +2074,26 @@ class ImportDialog(QDialog):
             template_name = str(current_settings.get("selected_template", "Original filename"))
             self.rename_preset_label.setText(template_name)
 
+    def _refresh_import_blocks(self) -> None:
+        self._update_rename_preset_display()
+        self._update_destination_preset_display()
+        self._update_iptc_preset_display()
+
     def _update_destination_preset_display(self) -> None:
         """Update destination preset display"""
+        import_config = self._get_import_config()
+        preset_name = str(import_config.get(self.DESTINATION_PRESET_ACTIVE_KEY, self.DEFAULT_DESTINATION_PRESET_NAME))
         if self.destination_preset_label:
-            import_config = self._get_import_config()
-            preset_name = str(import_config.get(self.DESTINATION_PRESET_ACTIVE_KEY, self.DEFAULT_DESTINATION_PRESET_NAME))
             self.destination_preset_label.setText(preset_name)
+        self._show_destination_path(import_config, preset_name)
+
+    def _show_destination_path(self, import_config: dict[str, object], name: str) -> None:
+        if not hasattr(self, "destination_path"):
+            return
+        presets = import_config.get(self.DESTINATION_PRESET_LIST_KEY, {})
+        chosen = presets.get(name, {}) if isinstance(presets, dict) else {}
+        root = str(chosen.get("target_root", "")) if isinstance(chosen, dict) else ""
+        self.destination_path.setText(root)
 
     # ===== Dialog Methods =====
 

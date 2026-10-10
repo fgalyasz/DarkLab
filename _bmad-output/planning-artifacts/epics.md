@@ -331,6 +331,24 @@ So that presets, renaming, and metadata do not bury the files.
 **Then** it has the summary, the duplicate choice, and Cancel plus the commit button
 **And** it does not offer an import-preset manager
 
+### Story 1.8: Separate the Import blocks
+
+As a Photographer,
+I want renaming, metadata, and the destination preset to read as separate blocks,
+So that I can see which control belongs to which job.
+
+**Acceptance Criteria:**
+
+**Given** Import
+**When** the window opens
+**Then** File Renaming, Metadata, and Destination are three shaded blocks, in that order
+**And** Destination shows the active preset and its folder
+
+**Given** an existing destination preset
+**When** a folder is chosen
+**Then** that preset's folder changes
+**And** the other destination presets remain
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.

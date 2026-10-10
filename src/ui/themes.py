@@ -194,6 +194,39 @@ class StyleSheet:
             border-bottom: 1px solid rgb(90, 90, 90);
             font-weight: 600;
         }
+        QWidget#importTopBar {
+            background-color: rgb(30, 30, 30);
+            border-bottom: 1px solid rgb(8, 8, 8);
+        }
+        QWidget#importBottomBar {
+            background-color: rgb(30, 30, 30);
+            border-top: 1px solid rgb(8, 8, 8);
+        }
+        QWidget#importSource {
+            background-color: rgb(42, 42, 42);
+            border-right: 1px solid rgb(10, 10, 10);
+        }
+        QWidget#importStage { background-color: rgb(22, 22, 22); }
+        QWidget#importSide {
+            background-color: rgb(54, 54, 54);
+            border-left: 1px solid rgb(10, 10, 10);
+        }
+        QFrame#importBlock {
+            background-color: rgb(28, 28, 28);
+            border: 1px solid rgb(12, 12, 12);
+            border-radius: 3px;
+        }
+        QLabel#importBlockTitle {
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(108, 108, 108), stop:1 rgb(62, 62, 62));
+            color: rgb(244, 244, 244);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-top: 1px solid rgb(140, 140, 140);
+            border-bottom: 1px solid rgb(10, 10, 10);
+        }
+        QWidget#importBlockBody { background-color: rgb(36, 36, 36); }
+        QWidget#importBlockBody QLabel { background: transparent; }
     """
     
     TOOLBAR = """

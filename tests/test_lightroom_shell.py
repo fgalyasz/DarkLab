@@ -192,6 +192,7 @@ class LightroomShellTests(unittest.TestCase):
         section.close()
 
     def test_import_dialog_layout(self) -> None:
+        from PyQt6.QtWidgets import QLabel
         from src.ui.dialogs.import_dialog import ImportDialog
         dialog = ImportDialog()
         dialog.show()
@@ -226,13 +227,21 @@ class LightroomShellTests(unittest.TestCase):
         self.assertFalse(dialog.add_hint.isVisible())
         self.assertTrue(dialog.destination_section.isVisible())
         dialog._set_import_mode("add")
-        self.assertFalse(dialog.destination_section.isVisible())
+        self.assertTrue(dialog.destination_section.isVisible())
+        titles = [label.text() for label in dialog.findChildren(QLabel) if label.objectName() == "importBlockTitle"]
+        self.assertEqual(titles, ["File Renaming", "Metadata", "Destination"])
+        self.assertIsNotNone(dialog.rename_preset_label)
+        self.assertIsNotNone(dialog.iptc_creator_input)
+        self.assertIsNotNone(dialog.destination_preset_label)
         self.assertIsNone(dialog.preset_combo)
-        stored: dict[str, object] = {}
+        stored: dict[str, object] = {
+            "destination_presets": {"Wedding": {"target_root": "/a"}, "Default": {"target_root": "/old"}},
+            "active_destination_preset": "Default",
+        }
         dialog._write_destination(stored, "/shoots/out")
         presets = stored["destination_presets"]
         self.assertEqual(presets["Default"]["target_root"], "/shoots/out")
-        self.assertEqual(presets["Default"]["organize_mode"], "one_folder")
+        self.assertEqual(presets["Wedding"]["target_root"], "/a")
         dialog.close()
 
 
