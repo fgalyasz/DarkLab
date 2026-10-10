@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Import side panel stays within its width. Long names and the metadata note wrap instead of opening a horizontal scrollbar.
 - Import separates File Renaming, Metadata, and Destination into shaded blocks. Destination keeps its folder presets. The top bar, the source, the grid, and the bottom bar are separate bands.
 - Import keeps Copy, Move, and Add in one row. Assisted Culling sits apart from that choice. The Add caption appears only while Add is selected.
 - Import skips a photograph whose contents are already in the catalog. The same file is never added twice. "Import duplicates as new photos" records a second copy at a different path. A skip does not change the existing photograph and does not copy or move the file.

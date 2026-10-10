@@ -192,7 +192,7 @@ class LightroomShellTests(unittest.TestCase):
         section.close()
 
     def test_import_dialog_layout(self) -> None:
-        from PyQt6.QtWidgets import QLabel
+        from PyQt6.QtWidgets import QLabel, QScrollArea, QWidget
         from src.ui.dialogs.import_dialog import ImportDialog
         dialog = ImportDialog()
         dialog.show()
@@ -230,6 +230,10 @@ class LightroomShellTests(unittest.TestCase):
         self.assertTrue(dialog.destination_section.isVisible())
         titles = [label.text() for label in dialog.findChildren(QLabel) if label.objectName() == "importBlockTitle"]
         self.assertEqual(titles, ["File Renaming", "Metadata", "Destination"])
+        side = next(widget for widget in dialog.findChildren(QWidget) if widget.objectName() == "importSide")
+        settings_scroll = side.findChildren(QScrollArea)[0]
+        self.assertEqual(settings_scroll.horizontalScrollBar().maximum(), 0)
+        self.assertLessEqual(settings_scroll.widget().minimumSizeHint().width(), side.width())
         self.assertIsNotNone(dialog.rename_preset_label)
         self.assertIsNotNone(dialog.iptc_creator_input)
         self.assertIsNotNone(dialog.destination_preset_label)

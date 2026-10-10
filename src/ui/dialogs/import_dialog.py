@@ -755,6 +755,7 @@ class ImportDialog(QDialog):
         layout.setSpacing(0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         settings = QWidget()
         settings_layout = QVBoxLayout(settings)
         settings_layout.setContentsMargins(0, 0, 0, 0)
@@ -1221,6 +1222,25 @@ class ImportDialog(QDialog):
         parent_layout.addWidget(self.destination_section)
         parent_layout.addStretch()
 
+    def _heading_row(self, title: str, handler) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel(title))
+        row.addStretch()
+        row.addWidget(self._create_small_button("Configure...", handler))
+        return row
+
+    def _wrapping_value(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setWordWrap(True)
+        label.setMinimumWidth(0)
+        label.setStyleSheet("color: white; font-weight: bold;")
+        return label
+
+    def _panel_field(self) -> QLineEdit:
+        field = QLineEdit()
+        field.setMinimumWidth(0)
+        return field
+
     def _shaded_block(self, title: str, body: QWidget) -> QFrame:
         frame = QFrame()
         frame.setObjectName("importBlock")
@@ -1240,20 +1260,19 @@ class ImportDialog(QDialog):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
         layout.addLayout(self._destination_preset_row())
-        self.destination_path = QLineEdit()
+        self.destination_path = self._panel_field()
         self.destination_path.setReadOnly(True)
         layout.addWidget(self.destination_path)
         layout.addWidget(self._plain_button("Choose Folder", self._choose_destination_folder))
         return panel
 
-    def _destination_preset_row(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Preset"))
-        self.destination_preset_label = QLabel(self.DEFAULT_DESTINATION_PRESET_NAME)
-        row.addWidget(self.destination_preset_label)
-        row.addStretch()
-        row.addWidget(self._create_small_button("Configure...", self._open_destination_dialog))
-        return row
+    def _destination_preset_row(self) -> QVBoxLayout:
+        column = QVBoxLayout()
+        column.setSpacing(4)
+        column.addLayout(self._heading_row("Preset", self._open_destination_dialog))
+        self.destination_preset_label = self._wrapping_value(self.DEFAULT_DESTINATION_PRESET_NAME)
+        column.addWidget(self.destination_preset_label)
+        return column
 
     def _choose_destination_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Destination Folder", self.destination_path.text())
@@ -1407,19 +1426,12 @@ class ImportDialog(QDialog):
     def _create_file_renaming_widget(self) -> QWidget:
         """Create file renaming widget"""
         widget = QWidget()
-        layout = QHBoxLayout(widget)
+        layout = QVBoxLayout(widget)
         layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(8)
-
-        layout.addWidget(QLabel("Pattern:"))
-        self.rename_preset_label = QLabel("Original filename")
-        self.rename_preset_label.setStyleSheet("color: white; font-weight: bold;")
+        layout.setSpacing(6)
+        layout.addLayout(self._heading_row("Pattern", self._open_rename_dialog))
+        self.rename_preset_label = self._wrapping_value("Original filename")
         layout.addWidget(self.rename_preset_label)
-        layout.addStretch()
-
-        edit_button = self._create_small_button("Configure...", self._open_rename_dialog)
-        layout.addWidget(edit_button)
-
         return widget
 
     def _create_destination_widget(self) -> QWidget:
@@ -1455,28 +1467,19 @@ class ImportDialog(QDialog):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
 
-        # Preset selector row
-        preset_layout = QHBoxLayout()
-        preset_layout.addWidget(QLabel("Metadata"))
-        self.iptc_preset_label = QLabel("Default")
-        self.iptc_preset_label.setStyleSheet("color: white; font-weight: bold;")
-        preset_layout.addWidget(self.iptc_preset_label)
-        preset_layout.addStretch()
-
-        edit_button = self._create_small_button("Configure...", self._open_iptc_dialog)
-        preset_layout.addWidget(edit_button)
-
-        layout.addLayout(preset_layout)
-
-        # Help text for asterisk behavior
+        layout.addLayout(self._heading_row("Preset", self._open_iptc_dialog))
+        self.iptc_preset_label = self._wrapping_value("Default")
+        layout.addWidget(self.iptc_preset_label)
         help_label = QLabel("* = existing in images (delete to remove, keep to preserve)")
+        help_label.setWordWrap(True)
+        help_label.setMinimumWidth(0)
         help_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 10px;")
         layout.addWidget(help_label)
 
         # Creator field
         creator_layout = QHBoxLayout()
         creator_layout.addWidget(QLabel("Creator:"))
-        self.iptc_creator_input = QLineEdit()
+        self.iptc_creator_input = self._panel_field()
         self.iptc_creator_input.setPlaceholderText("Photographer name")
         self.iptc_creator_input.textEdited.connect(self._on_iptc_field_changed)
         creator_layout.addWidget(self.iptc_creator_input)
@@ -1485,7 +1488,7 @@ class ImportDialog(QDialog):
         # Copyright field
         copyright_layout = QHBoxLayout()
         copyright_layout.addWidget(QLabel("Copyright:"))
-        self.iptc_copyright_input = QLineEdit()
+        self.iptc_copyright_input = self._panel_field()
         self.iptc_copyright_input.setPlaceholderText("Copyright notice")
         self.iptc_copyright_input.textEdited.connect(self._on_iptc_field_changed)
         copyright_layout.addWidget(self.iptc_copyright_input)
@@ -1494,7 +1497,7 @@ class ImportDialog(QDialog):
         # Credit field
         credit_layout = QHBoxLayout()
         credit_layout.addWidget(QLabel("Credit:"))
-        self.iptc_credit_input = QLineEdit()
+        self.iptc_credit_input = self._panel_field()
         self.iptc_credit_input.setPlaceholderText("Credit line")
         self.iptc_credit_input.textEdited.connect(self._on_iptc_field_changed)
         credit_layout.addWidget(self.iptc_credit_input)
@@ -1503,7 +1506,7 @@ class ImportDialog(QDialog):
         # Source field
         source_layout = QHBoxLayout()
         source_layout.addWidget(QLabel("Source:"))
-        self.iptc_source_input = QLineEdit()
+        self.iptc_source_input = self._panel_field()
         self.iptc_source_input.setPlaceholderText("Source")
         self.iptc_source_input.textEdited.connect(self._on_iptc_field_changed)
         source_layout.addWidget(self.iptc_source_input)
@@ -1514,6 +1517,7 @@ class ImportDialog(QDialog):
         layout.addWidget(keywords_label)
 
         self.iptc_keywords_input = QTextEdit()
+        self.iptc_keywords_input.setMinimumWidth(0)
         self.iptc_keywords_input.setMaximumHeight(100)
         self.iptc_keywords_input.setPlaceholderText("Enter keywords, one per line...\nExisting keywords will be marked with *")
         self.iptc_keywords_input.textChanged.connect(self._on_iptc_keywords_changed)

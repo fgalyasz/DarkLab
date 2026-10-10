@@ -349,6 +349,19 @@ So that I can see which control belongs to which job.
 **Then** that preset's folder changes
 **And** the other destination presets remain
 
+### Story 1.9: Keep the Import side panel inside its column
+
+As a Photographer,
+I want the Import side panel to stay inside its column,
+So that I do not scroll sideways to reach renaming, metadata, or the destination.
+
+**Acceptance Criteria:**
+
+**Given** the Import window at its default size
+**When** the side panel is shown
+**Then** it has no horizontal scrollbar
+**And** the settings content is no wider than the column
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.
