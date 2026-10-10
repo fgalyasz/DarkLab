@@ -6,7 +6,7 @@ The promise is that workflow, on a local catalog, without a subscription. It is 
 
 ## Status
 
-`main` has an import dialog and a library grid, plus placeholder panels. The product is specified. Implementation follows the epics, starting with catalog and import.
+`main` has an import dialog, a Library browser, and a Develop panel shell. Map, Book, Slideshow, Print, and Web are empty modules. The product is specified. Implementation follows the epics, starting with the catalog.
 
 | | |
 | --- | --- |

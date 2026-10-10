@@ -40,10 +40,10 @@ class GridImageWidget(QWidget):
         self.left_margin = 0
         self.right_margin = 0
         
-        self.bg_color = QColor(35, 35, 40)
-        self.card_bg_color = QColor(45, 45, 50)
-        self.card_hover_color = QColor(55, 55, 60)
-        self.card_selected_color = QColor(70, 130, 180)
+        self.bg_color = QColor(54, 54, 54)
+        self.card_bg_color = QColor(54, 54, 54)
+        self.card_hover_color = QColor(68, 68, 68)
+        self.card_selected_color = QColor(76, 76, 76)
         self.text_color = QColor(220, 220, 220)
         
         self.setStyleSheet(f"background-color: rgb({self.bg_color.red()}, {self.bg_color.green()}, {self.bg_color.blue()});")
@@ -154,6 +154,9 @@ class GridImageWidget(QWidget):
                 bg_color = self.card_bg_color
             
             painter.fillRect(cell_rect, bg_color)
+            if is_selected:
+                painter.setPen(QPen(QColor(235, 235, 235), 2))
+                painter.drawRect(cell_rect.adjusted(1, 1, -2, -2))
             
             image_rect = QRect(
                 cell_rect.x() + self.card_margin,

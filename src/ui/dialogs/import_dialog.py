@@ -25,10 +25,14 @@ from PyQt6.QtWidgets import (
     QGroupBox, QCheckBox, QGridLayout, QTextEdit, QSizePolicy,
     QPushButton, QProgressBar, QAbstractItemView, QSlider, QComboBox,
     QFileDialog, QMessageBox, QInputDialog, QDialog, QDialogButtonBox,
-    QApplication, QListView, QSpinBox
+    QApplication, QListView, QSpinBox, QStackedWidget
 )
 
 from src.config.config_manager import ConfigManager
+from src.ui.import_summary import byte_total, import_status_text
+from src.ui.library_catalog import merge_catalog_paths
+from src.ui.themes import StyleSheet
+from src.ui.widgets.collapsible_section import CollapsibleSection
 from src.ui.widgets.grid_image_widget import GridImageWidget
 from src.ui.dialogs import RenamePatternDialog, DestinationSettingsDialog
 from src.ui.dialogs.iptc_preset_dialog import IPTCPresetDialog
@@ -359,6 +363,8 @@ class ImportDialog(QDialog):
         self.import_cancel_button: Optional[QPushButton] = None
         self.is_importing = False
         self.import_cancel_requested = False
+        self._import_mode = "import"
+        self._mode_buttons: dict[str, QPushButton] = {}
 
         # Threading
         self.discovery_thread: Optional[ImageDiscoveryThread] = None
@@ -384,420 +390,291 @@ class ImportDialog(QDialog):
         self._load_import_settings_into_ui()
 
     def _setup_ui(self) -> None:
-        """Setup the full dialog UI matching LibraryPanel layout"""
-        self.setStyleSheet("""
-            QDialog {
-                background-color: rgb(35, 35, 40);
-            }
-            QLabel {
-                color: white;
-            }
-            QPushButton {
-                background-color: rgb(68, 68, 74);
-                color: white;
-                border: 1px solid rgb(90, 90, 96);
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: rgb(78, 78, 84);
-                border-color: rgb(0, 122, 255);
-            }
-            QPushButton:pressed {
-                background-color: rgb(88, 88, 94);
-            }
-            QPushButton:disabled {
-                background-color: rgb(55, 55, 60);
-                color: rgb(160, 160, 165);
-            }
-            QLineEdit {
-                background-color: rgb(48, 48, 54);
-                color: white;
-                border: 1px solid rgb(70, 70, 76);
-                border-radius: 4px;
-                padding: 6px;
-            }
-            QLineEdit:focus {
-                border-color: rgb(0, 122, 255);
-            }
-            QComboBox {
-                background-color: rgb(48, 48, 54);
-                color: white;
-                border: 1px solid rgb(70, 70, 76);
-                border-radius: 4px;
-                padding: 6px;
-            }
-            QComboBox:focus {
-                border-color: rgb(0, 122, 255);
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 24px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: rgb(48, 48, 54);
-                color: white;
-                border: 1px solid rgb(70, 70, 76);
-                selection-background-color: rgb(0, 122, 255);
-            }
-            QCheckBox {
-                color: white;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 1px solid rgb(90, 90, 96);
-                border-radius: 3px;
-                background-color: rgb(48, 48, 54);
-            }
-            QCheckBox::indicator:checked {
-                background-color: rgb(0, 122, 255);
-                border-color: rgb(0, 122, 255);
-            }
-            QGroupBox {
-                color: white;
-                border: 1px solid rgb(70, 70, 76);
-                border-radius: 6px;
-                margin-top: 12px;
-                padding-top: 12px;
-                font-weight: bold;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-            QTreeWidget {
-                background-color: rgb(35, 35, 40);
-                color: white;
-                border: 1px solid rgb(60, 60, 65);
-                border-radius: 4px;
-            }
-            QTreeWidget::item:selected {
-                background-color: rgb(0, 122, 255);
-            }
-            QSlider::groove:horizontal {
-                border: 1px solid rgb(70, 70, 76);
-                height: 8px;
-                background: rgb(48, 48, 54);
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: rgb(0, 122, 255);
-                border: none;
-                width: 18px;
-                margin: -2px 0;
-                border-radius: 9px;
-            }
-            QSpinBox {
-                background-color: rgb(48, 48, 54);
-                color: white;
-                border: 1px solid rgb(70, 70, 76);
-                border-radius: 4px;
-                padding: 5px;
-            }
-            QProgressBar {
-                border: 1px solid rgb(60, 60, 65);
-                border-radius: 3px;
-                text-align: center;
-                color: white;
-                background-color: rgb(40, 40, 45);
-            }
-            QProgressBar::chunk {
-                background-color: rgb(0, 122, 255);
-                border-radius: 2px;
-            }
-        """)
-
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
-
-        # Create splitter for 3-column layout
-        main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.main_splitter = main_splitter
-
-        # Note: Not connecting splitterMoved to avoid any automatic resize behavior
-        # main_splitter.splitterMoved.connect(self._on_splitter_moved)
-
-        # Setup resize timer for manual resize only
-        self.resize_timer = QTimer(self)
-        self.resize_timer.setSingleShot(True)
-        self.resize_timer.timeout.connect(self._apply_grid_layout)
-
-        # Left column - Folder tree
-        self._setup_folder_tree(main_splitter)
-
-        # Middle column - Image grid with filters
-        self._setup_image_grid(main_splitter)
-
-        # Right column - Import settings
-        self._setup_import_settings(main_splitter)
-
-        # Set fixed widths on splitter widgets - no resizing allowed
-        left_panel = main_splitter.widget(0)
-        right_panel = main_splitter.widget(2)
-        if left_panel:
-            left_panel.setFixedWidth(280)  # Fixed width - cannot resize
-        if right_panel:
-            right_panel.setFixedWidth(380)  # Fixed width - cannot resize
-
-        # Disable splitter resizing completely
-        main_splitter.setHandleWidth(0)  # Hide splitter handles
-        main_splitter.setOpaqueResize(False)  # Disable opaque resize
-        
-        main_layout.addWidget(main_splitter)
-
-        # Bottom button bar
-        button_layout = QHBoxLayout()
-        self.import_status_label = QLabel("Select a folder to import from")
-        self.import_status_label.setStyleSheet("color: rgb(180, 180, 180);")
-        button_layout.addWidget(self.import_status_label)
-
-        button_layout.addStretch()
-
-        self.import_button = QPushButton("Import Selected")
-        self.import_button.setStyleSheet("""
-            QPushButton {
-                background-color: rgb(0, 122, 255);
-                color: white;
-                font-weight: bold;
-                padding: 10px 24px;
-            }
-            QPushButton:hover {
-                background-color: rgb(20, 142, 255);
-            }
-            QPushButton:disabled {
-                background-color: rgb(55, 55, 60);
-                color: rgb(160, 160, 165);
-            }
-        """)
-        self.import_button.clicked.connect(self._start_import)
-        button_layout.addWidget(self.import_button)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
-
-        main_layout.addLayout(button_layout)
-
-        # Setup keyboard shortcuts for selection
+        self.setWindowTitle("DarkLab Catalog - Import")
+        self.setStyleSheet(StyleSheet.IMPORT_DIALOG)
+        self._prepare_resize_timer()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._build_import_top_bar())
+        layout.addWidget(self._build_import_splitter(), 1)
+        layout.addWidget(self._build_import_bottom_bar())
+        self._set_import_mode("import")
         self._setup_selection_shortcuts()
+        self._sync_center_view()
+        self._refresh_import_summary()
 
     def _setup_selection_shortcuts(self) -> None:
-        """Setup keyboard shortcuts for selection"""
-        # Select All: Ctrl+A (works on both macOS and Windows/Linux)
-        select_all_shortcut = QShortcut(QKeySequence.StandardKey.SelectAll, self)
-        select_all_shortcut.activated.connect(self._select_all_images)
-
-        # Deselect All: Ctrl+D / Cmd+D
-        deselect_all_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
-        deselect_all_shortcut.activated.connect(self._clear_selected_images)
-
-        # macOS specific: Cmd+D
+        select_all = QShortcut(QKeySequence.StandardKey.SelectAll, self)
+        select_all.activated.connect(self._select_all_images)
+        deselect_all = QShortcut(QKeySequence("Ctrl+D"), self)
+        deselect_all.activated.connect(self._clear_selected_images)
         if platform.system() == "Darwin":
             deselect_mac = QShortcut(QKeySequence("Meta+D"), self)
             deselect_mac.activated.connect(self._clear_selected_images)
 
-    def _setup_folder_tree(self, parent: QSplitter) -> None:
-        """Setup folder tree widget (left column)"""
-        left_widget = QWidget()
-        left_widget.setFixedWidth(280)
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 12, 0)  # 12px right margin
-        left_layout.setSpacing(8)
+    def _prepare_resize_timer(self) -> None:
+        self.resize_timer = QTimer(self)
+        self.resize_timer.setSingleShot(True)
+        self.resize_timer.timeout.connect(self._apply_grid_layout)
 
-        # Title
-        title = QLabel("Source Folders")
-        title.setStyleSheet("font-weight: bold; color: white; padding: 5px; font-size: 14px;")
-        left_layout.addWidget(title)
+    def _build_import_splitter(self) -> QSplitter:
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter = splitter
+        self._setup_folder_tree(splitter)
+        self._setup_image_grid(splitter)
+        self._setup_import_settings(splitter)
+        splitter.setHandleWidth(4)
+        splitter.setSizes([240, 980, 300])
+        return splitter
 
-        # Recursive loading checkbox
-        self.recursive_checkbox = QCheckBox("Load subfolders recursively")
-        self.recursive_checkbox.setChecked(True)  # Default to recursive loading
-        self.recursive_checkbox.toggled.connect(self._on_recursive_toggled)
-        left_layout.addWidget(self.recursive_checkbox)
+    def _build_import_top_bar(self) -> QWidget:
+        bar = QWidget()
+        bar.setFixedHeight(52)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(10, 4, 12, 4)
+        self.source_button = QPushButton("Select a source")
+        self.source_button.clicked.connect(self._focus_source_tree)
+        row.addWidget(self.source_button)
+        row.addWidget(self._plain_button("→", self._advance_source))
+        row.addStretch()
+        row.addWidget(self._mode_button("import", "Import"))
+        row.addWidget(self._mode_button("culling", "Assisted Culling"))
+        row.addWidget(self._add_mode_box())
+        row.addStretch()
+        row.addWidget(QLabel("DarkLab Catalog"))
+        return bar
 
-        # Folder tree
-        self.folder_tree = QTreeWidget()
-        self.folder_tree.setHeaderHidden(True)
-        self.folder_tree.setRootIsDecorated(True)
-        self.folder_tree.itemClicked.connect(self._on_folder_selected)
-        self.folder_tree.itemExpanded.connect(self._on_folder_expanded)
-        left_layout.addWidget(self.folder_tree)
+    def _add_mode_box(self) -> QWidget:
+        box = QWidget()
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._mode_button("add", "Add"))
+        self.add_hint = QLabel("Add photos to catalog without moving them")
+        self.add_hint.setStyleSheet("color: rgb(150, 150, 150); font-size: 10px;")
+        layout.addWidget(self.add_hint)
+        return box
 
-        parent.addWidget(left_widget)
+    def _mode_button(self, mode: str, title: str) -> QPushButton:
+        button = QPushButton(title)
+        button.setObjectName("importMode")
+        button.setCheckable(True)
+        button.setProperty("import_mode", mode)
+        button.clicked.connect(self._on_mode_clicked)
+        self._mode_buttons[mode] = button
+        return button
 
-        # Load folder structure
-        self._load_folder_structure()
+    def _on_mode_clicked(self) -> None:
+        button = self.sender()
+        if isinstance(button, QPushButton):
+            self._set_import_mode(str(button.property("import_mode")))
 
-    def _setup_image_grid(self, parent: QSplitter) -> None:
-        """Setup image grid with filters (middle column)"""
-        middle_widget = QWidget()
-        middle_layout = QVBoxLayout(middle_widget)
-        middle_layout.setContentsMargins(12, 0, 12, 0)  # 12px left and right margins
-        middle_layout.setSpacing(10)
+    def _set_import_mode(self, mode: str) -> None:
+        self._import_mode = mode
+        for key, button in self._mode_buttons.items():
+            button.setChecked(key == mode)
+        if hasattr(self, "culling_bar"):
+            self.culling_bar.setVisible(mode == "culling")
+        if self.import_button is not None:
+            self.import_button.setText("Add" if mode == "add" else "Import")
 
-        # Title
-        title = QLabel("Select Images to Import")
-        title.setStyleSheet("font-weight: bold; color: white; padding: 5px; font-size: 14px;")
-        middle_layout.addWidget(title)
+    def _build_import_bottom_bar(self) -> QWidget:
+        bar = QWidget()
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(8, 6, 8, 6)
+        self._add_import_status(row)
+        self._add_import_tools(row)
+        self._add_import_actions(row)
+        return bar
 
-        # Filter controls row
-        controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(12)
-
-        # Grid columns control
-        columns_label = QLabel("Columns:")
-        columns_label.setStyleSheet("color: white;")
-        controls_layout.addWidget(columns_label)
-
-        self.columns_slider = QSlider(Qt.Orientation.Horizontal)
-        self.columns_slider.setRange(self.MIN_GRID_COLUMNS, self.MAX_GRID_COLUMNS)
-        self.columns_slider.setValue(self.grid_columns)
-        self.columns_slider.setFixedWidth(120)
-        self.columns_slider.valueChanged.connect(self._on_columns_changed)
-        controls_layout.addWidget(self.columns_slider)
-
-        self.columns_value_label = QLabel(str(self.grid_columns))
-        self.columns_value_label.setStyleSheet("color: rgb(180, 180, 180);")
-        self.columns_value_label.setMinimumWidth(20)
-        controls_layout.addWidget(self.columns_value_label)
-
-        controls_layout.addSpacing(20)
-
-        # Filter combos
-        self.pick_filter_combo = self._create_marker_combo(self.PICK_OPTIONS)
-        self.pick_filter_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.pick_filter_combo.currentIndexChanged.connect(self._on_media_filter_changed)
-        pick_label = QLabel("Pick:")
-        pick_label.setStyleSheet("color: white;")
-        controls_layout.addWidget(pick_label)
-        controls_layout.addWidget(self.pick_filter_combo, 1)
-
-        controls_layout.addSpacing(8)
-
-        self.rating_filter_combo = self._create_marker_combo(self.RATING_OPTIONS)
-        self.rating_filter_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.rating_filter_combo.currentIndexChanged.connect(self._on_media_filter_changed)
-        stars_label = QLabel("Stars:")
-        stars_label.setStyleSheet("color: white;")
-        controls_layout.addWidget(stars_label)
-        controls_layout.addWidget(self.rating_filter_combo, 1)
-
-        controls_layout.addSpacing(8)
-
-        self.color_filter_combo = self._create_marker_combo(self.COLOR_OPTIONS)
-        self.color_filter_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.color_filter_combo.currentIndexChanged.connect(self._on_media_filter_changed)
-        color_label = QLabel("Color:")
-        color_label.setStyleSheet("color: white;")
-        controls_layout.addWidget(color_label)
-        controls_layout.addWidget(self.color_filter_combo, 1)
-
-        controls_layout.addSpacing(8)
-
-        days_label = QLabel("Days:")
-        days_label.setStyleSheet("color: white;")
-        controls_layout.addWidget(days_label)
-        self.days_back_spin = QSpinBox()
-        self.days_back_spin.setRange(self.FILTER_DAYS_MIN, self.FILTER_DAYS_MAX)
-        self.days_back_spin.setValue(self.FILTER_DAYS_DEFAULT)
-        self.days_back_spin.setFixedWidth(80)
-        self.days_back_spin.valueChanged.connect(self._on_media_filter_changed)
-        controls_layout.addWidget(self.days_back_spin)
-
-        controls_layout.addSpacing(8)
-
-        self.sort_combo = self._create_marker_combo(self.SORT_OPTIONS)
-        self.sort_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.sort_combo.currentIndexChanged.connect(self._on_media_filter_changed)
-        sort_label = QLabel("Sort:")
-        sort_label.setStyleSheet("color: white;")
-        controls_layout.addWidget(sort_label)
-        controls_layout.addWidget(self.sort_combo, 1)
-
-        controls_layout.addStretch()
-
-        # Progress bar and cancel button
+    def _add_import_status(self, row: QHBoxLayout) -> None:
+        self.import_status_label = QLabel("0 photos / 0 bytes")
+        row.addWidget(self.import_status_label)
+        row.addWidget(self._plain_button("Check All", self._select_all_images))
+        row.addWidget(self._plain_button("Uncheck All", self._clear_selected_images))
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setMaximumWidth(150)
-        controls_layout.addWidget(self.progress_bar)
+        self.progress_bar.setMaximumWidth(140)
+        self.cancel_button = self._loading_cancel_button()
+        row.addWidget(self.progress_bar)
+        row.addWidget(self.cancel_button)
 
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setVisible(False)
-        self.cancel_button.setStyleSheet("""
-            QPushButton {
-                background-color: rgb(220, 50, 50);
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 5px 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgb(240, 70, 70);
-            }
-        """)
-        self.cancel_button.clicked.connect(self._cancel_loading)
-        controls_layout.addWidget(self.cancel_button)
+    def _add_import_tools(self, row: QHBoxLayout) -> None:
+        row.addStretch()
+        row.addWidget(QLabel("Sort"))
+        self.sort_combo = self._create_marker_combo(self.SORT_OPTIONS)
+        self.sort_combo.currentIndexChanged.connect(self._on_media_filter_changed)
+        self.columns_slider = self._thumbnail_slider()
+        self.columns_value_label = QLabel(str(self.grid_columns))
+        row.addWidget(self.sort_combo)
+        row.addWidget(QLabel("Thumbnails"))
+        row.addWidget(self.columns_slider)
+        row.addWidget(self.columns_value_label)
 
-        middle_layout.addLayout(controls_layout)
+    def _add_import_actions(self, row: QHBoxLayout) -> None:
+        row.addWidget(self._create_import_preset_widget())
+        self.import_button = self._import_action_button()
+        row.addWidget(self._plain_button("Done", self.reject))
+        row.addWidget(self._plain_button("Cancel", self.reject))
+        row.addWidget(self.import_button)
 
-        # QScrollArea with GridImageWidget
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll_area.setWidgetResizable(True)  # Allow widget to resize to fit
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+    def _thumbnail_slider(self) -> QSlider:
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setRange(self.MIN_GRID_COLUMNS, self.MAX_GRID_COLUMNS)
+        slider.setValue(self.grid_columns)
+        slider.setFixedWidth(120)
+        slider.valueChanged.connect(self._on_columns_changed)
+        return slider
 
+    def _loading_cancel_button(self) -> QPushButton:
+        button = QPushButton("Cancel")
+        button.setVisible(False)
+        button.clicked.connect(self._cancel_loading)
+        return button
+
+    def _import_action_button(self) -> QPushButton:
+        button = QPushButton("Import")
+        button.setObjectName("importAction")
+        button.clicked.connect(self._start_import)
+        return button
+
+    def _plain_button(self, title: str, handler) -> QPushButton:
+        button = QPushButton(title)
+        button.clicked.connect(handler)
+        return button
+
+    def _focus_source_tree(self) -> None:
+        self.folder_tree.setFocus()
+
+    def _advance_source(self) -> None:
+        item = self.folder_tree.currentItem()
+        if item is None:
+            return
+        parent = item.parent() or self.folder_tree.invisibleRootItem()
+        nxt = parent.child(parent.indexOfChild(item) + 1)
+        if nxt is not None:
+            self.folder_tree.setCurrentItem(nxt)
+            self._on_folder_selected(nxt)
+
+    def _sync_center_view(self) -> None:
+        if hasattr(self, "center_stack"):
+            self.center_stack.setCurrentIndex(1 if self.current_folder else 0)
+
+    def _refresh_import_summary(self) -> None:
+        if self.import_status_label is None:
+            return
+        text = import_status_text(len(self.image_files), len(self.selected_images), byte_total(self.image_files))
+        self.import_status_label.setText(text)
+
+    def _add_selection_to_catalog(self) -> None:
+        if not self.selected_images:
+            QMessageBox.information(self, "Add", "Please select at least one image to add.")
+            return
+        stored = self.config_manager.get("library.catalog_paths", [])
+        self.config_manager.set("library.catalog_paths", merge_catalog_paths(stored, self.selected_images))
+        self.import_status_label.setText(f"Added {len(self.selected_images)} photos to the catalog.")
+
+    def _setup_folder_tree(self, parent: QSplitter) -> None:
+        left = QWidget()
+        left.setMinimumWidth(220)
+        layout = QVBoxLayout(left)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(CollapsibleSection("Source", self._source_body(), True, arrow_on_left=True, fill=True), 1)
+        parent.addWidget(left)
+        self._load_folder_structure()
+
+    def _source_body(self) -> QWidget:
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.folder_tree = QTreeWidget()
+        self.folder_tree.setHeaderHidden(True)
+        self.folder_tree.itemClicked.connect(self._on_folder_selected)
+        self.folder_tree.itemExpanded.connect(self._on_folder_expanded)
+        self.recursive_checkbox = QCheckBox("Include Subfolders")
+        self.recursive_checkbox.setChecked(True)
+        self.recursive_checkbox.toggled.connect(self._on_recursive_toggled)
+        layout.addWidget(self.folder_tree, 1)
+        layout.addWidget(self.recursive_checkbox)
+        return body
+
+    def _setup_image_grid(self, parent: QSplitter) -> None:
+        middle = QWidget()
+        layout = QVBoxLayout(middle)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.culling_bar = self._culling_bar()
+        self.culling_bar.setVisible(False)
+        self.center_stack = QStackedWidget()
+        self.source_prompt = QLabel("Please select a source.")
+        self.source_prompt.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.scroll_area = self._image_scroll()
+        self.center_stack.addWidget(self.source_prompt)
+        self.center_stack.addWidget(self.scroll_area)
+        layout.addWidget(self.culling_bar)
+        layout.addWidget(self.center_stack, 1)
+        parent.addWidget(middle)
+
+    def _culling_bar(self) -> QWidget:
+        bar = QWidget()
+        row = QHBoxLayout(bar)
+        self.pick_filter_combo = self._bound_combo(self.PICK_OPTIONS)
+        self.rating_filter_combo = self._bound_combo(self.RATING_OPTIONS)
+        self.color_filter_combo = self._bound_combo(self.COLOR_OPTIONS)
+        self.days_back_spin = self._days_spin()
+        row.addWidget(QLabel("Pick"))
+        row.addWidget(self.pick_filter_combo)
+        row.addWidget(QLabel("Stars"))
+        row.addWidget(self.rating_filter_combo)
+        row.addWidget(QLabel("Color"))
+        row.addWidget(self.color_filter_combo)
+        row.addWidget(QLabel("Days"))
+        row.addWidget(self.days_back_spin)
+        row.addStretch()
+        return bar
+
+    def _bound_combo(self, options: tuple[tuple[str, str], ...]) -> QComboBox:
+        combo = self._create_marker_combo(options)
+        combo.currentIndexChanged.connect(self._on_media_filter_changed)
+        return combo
+
+    def _days_spin(self) -> QSpinBox:
+        spin = QSpinBox()
+        spin.setRange(self.FILTER_DAYS_MIN, self.FILTER_DAYS_MAX)
+        spin.setValue(self.FILTER_DAYS_DEFAULT)
+        spin.setFixedWidth(80)
+        spin.valueChanged.connect(self._on_media_filter_changed)
+        return spin
+
+    def _image_scroll(self) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.grid_widget = GridImageWidget()
         self.grid_widget.selection_changed.connect(self._on_grid_selection_changed)
         self.grid_widget.marker_changed.connect(self._on_marker_changed)
-        self.scroll_area.setWidget(self.grid_widget)
-
-        middle_layout.addWidget(self.scroll_area)
-
-        parent.addWidget(middle_widget)
+        scroll.setWidget(self.grid_widget)
+        return scroll
 
     def _setup_import_settings(self, parent: QSplitter) -> None:
-        """Setup import settings panel (right column)"""
-        right_widget = QWidget()
-        right_widget.setFixedWidth(380)
-        right_widget.setStyleSheet("background-color: rgb(35, 35, 40);")  # Match other panels
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(12, 0, 0, 0)  # 12px left margin
-        right_layout.setSpacing(10)
-
-        # Title
-        title = QLabel("Import Settings")
-        title.setStyleSheet("font-weight: bold; color: white; padding: 5px; font-size: 14px;")
-        right_layout.addWidget(title)
-
-        # Scroll area for settings - no scrollbars needed with fixed width
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # No horizontal scrollbar
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-
-        settings_widget = QWidget()
-        settings_layout = QVBoxLayout(settings_widget)
+        right = QWidget()
+        right.setMinimumWidth(260)
+        layout = QVBoxLayout(right)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        settings = QWidget()
+        settings_layout = QVBoxLayout(settings)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
         settings_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        settings_layout.setSpacing(8)
-
         self._render_import_sections(settings_layout)
-
-        scroll_area.setWidget(settings_widget)
-        right_layout.addWidget(scroll_area)
-
-        parent.addWidget(right_widget)
+        scroll.setWidget(settings)
+        layout.addWidget(scroll)
+        parent.addWidget(right)
 
     def _create_marker_combo(self, options: tuple[tuple[str, str], ...]) -> QComboBox:
         """Create a filter combo box"""
@@ -947,6 +824,9 @@ class ImportDialog(QDialog):
     def _load_source_folder(self, folder_path: Path) -> None:
         """Load images from source folder"""
         self.current_folder = folder_path
+        if hasattr(self, "source_button"):
+            self.source_button.setText(folder_path.name)
+        self._sync_center_view()
         self.import_status_label.setText(f"Loading from: {folder_path.name}...")
 
         # Cancel any existing discovery
@@ -978,6 +858,8 @@ class ImportDialog(QDialog):
             self.progress_bar.setVisible(False)
             self.cancel_button.setVisible(False)
             self.is_loading = False
+            self._sync_center_view()
+            self._refresh_import_summary()
             return
 
         # Show images in grid immediately (thumbnails will load async)
@@ -1031,7 +913,7 @@ class ImportDialog(QDialog):
             self.cancel_button.setVisible(False)
             self.is_loading = False
             # Just update status, don't re-apply filters to avoid panel jumping
-            self.import_status_label.setText(f"Loaded {len(self.discovered_image_files)} images")
+            self._refresh_import_summary()
 
     def _cancel_loading(self) -> None:
         """Cancel loading operations"""
@@ -1088,6 +970,8 @@ class ImportDialog(QDialog):
         self._restore_splitter_sizes()
 
         self.image_files = filtered_images
+        self._sync_center_view()
+        self._refresh_import_summary()
 
     def _filter_images(self, images: List[Path]) -> List[Path]:
         """Filter images based on current filter state"""
@@ -1217,7 +1101,7 @@ class ImportDialog(QDialog):
     def _on_grid_selection_changed(self, image_paths: List[Path]) -> None:
         """Handle grid selection change"""
         self.selected_images = list(image_paths)
-        self.import_status_label.setText(f"Selected {len(self.selected_images)} of {len(self.image_files)} images")
+        self._refresh_import_summary()
         
         # Update IPTC fields from selected images
         self._update_iptc_fields_from_selection()
@@ -1242,12 +1126,19 @@ class ImportDialog(QDialog):
 
     def _render_import_sections(self, parent_layout: QVBoxLayout) -> None:
         """Render import settings sections"""
-        self._add_import_group("import_preset", "Import Preset", self._create_import_preset_widget(), parent_layout)
-        self._add_import_group("file_handling", "File Handling", self._create_file_handling_widget(), parent_layout)
-        self._add_import_group("file_renaming", "File Renaming", self._create_file_renaming_widget(), parent_layout)
-        self._add_import_group("destination", "Destination", self._create_destination_widget(), parent_layout)
-        self._add_import_group("iptc", "IPTC Metadata", self._create_iptc_widget(), parent_layout)
+        parent_layout.addWidget(CollapsibleSection("File Handling", self._file_handling_stack()))
+        parent_layout.addWidget(CollapsibleSection("Apply During Import", self._create_iptc_widget()))
         parent_layout.addStretch()
+
+    def _file_handling_stack(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
+        layout.addWidget(self._create_file_handling_widget())
+        layout.addWidget(self._create_destination_widget())
+        layout.addWidget(self._create_file_renaming_widget())
+        return widget
 
     def _add_import_group(self, panel_key: str, title: str, content_widget: QWidget, parent_layout: QVBoxLayout) -> None:
         """Add collapsible import group"""
@@ -1309,26 +1200,18 @@ class ImportDialog(QDialog):
     def _create_import_preset_widget(self) -> QWidget:
         """Create import preset widget"""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
-
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(4)
+        layout.addWidget(QLabel("Import Preset"))
         self.preset_combo = QComboBox()
+        self.preset_combo.setMinimumWidth(120)
         self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
         layout.addWidget(self.preset_combo)
-
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(6)
-        create_button = self._create_small_button("Create", self._create_import_preset)
-        save_button = self._create_small_button("Save", self._save_selected_preset)
-        rename_button = self._create_small_button("Rename", self._rename_import_preset)
-        delete_button = self._create_small_button("Delete", self._delete_import_preset)
-        button_layout.addWidget(create_button)
-        button_layout.addWidget(save_button)
-        button_layout.addWidget(rename_button)
-        button_layout.addWidget(delete_button)
-        layout.addLayout(button_layout)
-
+        layout.addWidget(self._create_small_button("Create", self._create_import_preset))
+        layout.addWidget(self._create_small_button("Save", self._save_selected_preset))
+        layout.addWidget(self._create_small_button("Rename", self._rename_import_preset))
+        layout.addWidget(self._create_small_button("Delete", self._delete_import_preset))
         self.preset_feedback_label = QLabel("")
         self.preset_feedback_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 11px;")
         layout.addWidget(self.preset_feedback_label)
@@ -1342,8 +1225,8 @@ class ImportDialog(QDialog):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
 
-        skip_duplicates = QCheckBox("Skip possible duplicates")
-        skip_rejected = QCheckBox("Skip rejected images")
+        skip_duplicates = QCheckBox("Don't Import Suspected Duplicates")
+        skip_rejected = QCheckBox("Don't Import Rejected Images")
         for checkbox, key in ((skip_duplicates, "skip_duplicates"), (skip_rejected, "skip_rejected")):
             checkbox.toggled.connect(lambda checked, setting_key=key: self._on_import_setting_changed(setting_key, checked))
             self.import_panel_widgets[key] = checkbox
@@ -1376,7 +1259,7 @@ class ImportDialog(QDialog):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(8)
 
-        layout.addWidget(QLabel("Preset:"))
+        layout.addWidget(QLabel("Destination"))
         self.destination_preset_label = QLabel("Default")
         self.destination_preset_label.setStyleSheet("color: white; font-weight: bold;")
         layout.addWidget(self.destination_preset_label)
@@ -1387,16 +1270,25 @@ class ImportDialog(QDialog):
 
         return widget
 
+    def _develop_settings_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Develop Settings"))
+        combo = QComboBox()
+        combo.addItem("None")
+        row.addWidget(combo, 1)
+        return row
+
     def _create_iptc_widget(self) -> QWidget:
         """Create IPTC metadata widget with all fields and smart asterisk handling"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
+        layout.addLayout(self._develop_settings_row())
 
         # Preset selector row
         preset_layout = QHBoxLayout()
-        preset_layout.addWidget(QLabel("Preset:"))
+        preset_layout.addWidget(QLabel("Metadata"))
         self.iptc_preset_label = QLabel("Default")
         self.iptc_preset_label.setStyleSheet("color: white; font-weight: bold;")
         preset_layout.addWidget(self.iptc_preset_label)
@@ -1449,7 +1341,7 @@ class ImportDialog(QDialog):
         layout.addLayout(source_layout)
 
         # Keywords text area
-        keywords_label = QLabel("Keywords (one per line, * = existing):")
+        keywords_label = QLabel("Keywords")
         layout.addWidget(keywords_label)
 
         self.iptc_keywords_input = QTextEdit()
@@ -2141,6 +2033,9 @@ class ImportDialog(QDialog):
     def _start_import(self) -> None:
         """Start import process"""
         if self.is_importing:
+            return
+        if self._import_mode == "add":
+            self._add_selection_to_catalog()
             return
 
         if not self.selected_images:

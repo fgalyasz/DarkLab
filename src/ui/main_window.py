@@ -5,21 +5,23 @@ Handles the main UI layout and panel management
 
 import logging
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QToolBar, QStackedWidget, QFrame, QLabel, QSizePolicy,
-    QMenuBar, QMenu
+    QMainWindow, QWidget, QVBoxLayout,
+    QStackedWidget, QMenuBar, QMenu
 )
-from PyQt6.QtCore import Qt, QRect, QTimer
-from PyQt6.QtGui import QScreen, QGuiApplication, QFont, QKeySequence, QShortcut
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
 from src.ui.panels.develop_panel import DevelopPanel
+from src.ui.panels.map_panel import MapPanel
+from src.ui.panels.book_panel import BookPanel
 from src.ui.panels.print_panel import PrintPanel
 from src.ui.panels.slideshow_panel import SlideshowPanel
 from src.ui.panels.website_panel import WebsitePanel
 from src.ui.dialogs import ImportDialog
+from src.ui.widgets.module_bar import ModuleBar
 
 
 class MainWindow(QMainWindow):
@@ -30,7 +32,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger(__name__)
         self.config_manager = ConfigManager()
         self.panels = {}
-        self.toolbar_buttons = {}
+        self.module_bar: ModuleBar | None = None
         
         self._setup_window()
         self._setup_ui()
@@ -44,7 +46,7 @@ class MainWindow(QMainWindow):
     
     def _setup_window(self) -> None:
         """Setup main window properties"""
-        self.setWindowTitle("DarkLab")
+        self.setWindowTitle("DarkLab Catalog - DarkLab")
         self.setMinimumSize(1000, 700)
         
         # Apply dark theme
@@ -65,9 +67,8 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Toolbar
-        self._setup_toolbar()
-        main_layout.addWidget(self.toolbar)
+        self._setup_module_bar()
+        main_layout.addWidget(self.module_bar)
 
         # Panel container
         self.panel_container = QStackedWidget()
@@ -95,59 +96,39 @@ class MainWindow(QMainWindow):
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
     
-    def _setup_toolbar(self) -> None:
-        """Setup the toolbar with title and panel navigation buttons"""
-        self.toolbar = QToolBar()
-        self.toolbar.setMovable(False)
-        self.toolbar.setStyleSheet(StyleSheet.TOOLBAR)
-        self.toolbar.setOrientation(Qt.Orientation.Horizontal)
-        
-        # Add title on the left side
-        title_label = QLabel("DarkLab")
-        title_font = title_label.font()
-        title_font.setPointSize(18)
-        title_font.setWeight(QFont.Weight.Bold)
-        title_label.setFont(title_font)
-        title_label.setStyleSheet("color: white; margin-right: 20px;")
-        self.toolbar.addWidget(title_label)
-        
-        # Add spacer to push panel buttons to the right
-        spacer = QWidget()
-        spacer.setSizePolicy(
-            QSizePolicy.Policy.Expanding, 
-            QSizePolicy.Policy.Preferred
-        )
-        self.toolbar.addWidget(spacer)
-        
-        # Panel buttons on the right side (Import removed, Library first)
-        panels = [
+    def _setup_module_bar(self) -> None:
+        modules = (
             ("library", "Library"),
             ("develop", "Develop"),
-            ("print", "Print"),
+            ("map", "Map"),
+            ("book", "Book"),
             ("slideshow", "Slideshow"),
-            ("website", "Website")
-        ]
-        
-        for panel_id, panel_name in panels:
-            button = self.toolbar.addAction(panel_name)
-            button.setData(panel_id)
-            button.triggered.connect(lambda checked, pid=panel_id: self._switch_to_panel(pid))
-            self.toolbar_buttons[panel_id] = button
+            ("print", "Print"),
+            ("website", "Web"),
+        )
+        self.module_bar = ModuleBar(modules, "DarkLab Catalog")
+        self.module_bar.setStyleSheet(StyleSheet.MODULE_BAR)
+        self.module_bar.module_selected.connect(self._switch_to_panel)
     
     def _setup_panels(self) -> None:
         """Setup all panels (Import removed - now a dialog)"""
         panel_classes = {
             "library": LibraryBrowserPanel,
             "develop": DevelopPanel,
+            "map": MapPanel,
+            "book": BookPanel,
             "print": PrintPanel,
             "slideshow": SlideshowPanel,
-            "website": WebsitePanel
+            "website": WebsitePanel,
         }
 
         for panel_id, panel_class in panel_classes.items():
             panel = panel_class()
             self.panels[panel_id] = panel
             self.panel_container.addWidget(panel)
+        library = self.panels.get("library")
+        if isinstance(library, LibraryBrowserPanel):
+            library.import_requested.connect(self._open_import_dialog)
     
     def _apply_initial_state(self) -> None:
         """Apply initial window state from config"""
@@ -204,8 +185,8 @@ class MainWindow(QMainWindow):
             self.config_manager.set_current_panel(panel_id)
             
             # Update toolbar button states
-            for pid, button in self.toolbar_buttons.items():
-                button.setChecked(pid == panel_id)
+            if self.module_bar is not None:
+                self.module_bar.set_current(panel_id)
             
             self.logger.info(f"Switched to panel: {panel_id}")
         else:
