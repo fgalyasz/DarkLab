@@ -202,6 +202,13 @@ class LightroomShellTests(unittest.TestCase):
         dialog._set_import_mode("culling")
         self.assertTrue(dialog.culling_bar.isVisible())
         dialog._set_import_mode("add")
+        self.assertFalse(dialog.import_button.isEnabled())
+        dialog.selected_images = [Path("a.jpg")]
+        dialog._sync_import_button()
+        self.assertTrue(dialog.import_button.isEnabled())
+        dialog._set_import_mode("move")
+        self.assertEqual(dialog.import_button.text(), "Move")
+        dialog._set_import_mode("add")
         self.assertEqual(dialog.import_button.text(), "Add")
         dialog.close()
 

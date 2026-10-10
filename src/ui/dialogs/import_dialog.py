@@ -30,7 +30,9 @@ from PyQt6.QtWidgets import (
 
 from src.config.config_manager import ConfigManager
 from src.ui.import_summary import byte_total, import_status_text
+from src.importing.discover import discover_images
 from src.importing.originals import import_originals
+from src.importing.transfer import copy_original, move_original
 from src.ui.themes import StyleSheet
 from src.ui.widgets.collapsible_section import CollapsibleSection
 from src.ui.widgets.grid_image_widget import GridImageWidget
@@ -182,25 +184,14 @@ class ImageDiscoveryThread(QThread):
         self._is_cancelled = False
         self.image_files = []
 
-    def run(self):
-        """Discover image files in background thread"""
+    def run(self) -> None:
         try:
-            folder_path = Path(self.folder_path)
-            self.image_files = []
-
-            if self.recursive:
-                image_files = self._find_images_recursive(folder_path)
-            else:
-                image_files = self._find_images_non_recursive(folder_path)
-            image_files = sorted(image_files, key=lambda p: (p.stem.lower(), p.suffix.lower(), p.name.lower()))
-
-            self.image_files = [str(path) for path in image_files]
-
+            found = discover_images(Path(self.folder_path), self.recursive)
+            self.image_files = [str(path) for path in found]
             if not self._is_cancelled:
                 self.discovery_finished.emit(self.image_files)
-
-        except Exception as e:
-            logger.error("Error in image discovery thread: %s", e)
+        except Exception as error:
+            logger.error("Error in image discovery thread: %s", error)
 
     def cancel(self):
         self._is_cancelled = True
@@ -439,7 +430,8 @@ class ImportDialog(QDialog):
         row.addWidget(self.source_button)
         row.addWidget(self._plain_button("→", self._advance_source))
         row.addStretch()
-        row.addWidget(self._mode_button("import", "Import"))
+        row.addWidget(self._mode_button("import", "Copy"))
+        row.addWidget(self._mode_button("move", "Move"))
         row.addWidget(self._mode_button("culling", "Assisted Culling"))
         row.addWidget(self._add_mode_box())
         row.addStretch()
@@ -478,7 +470,7 @@ class ImportDialog(QDialog):
         if hasattr(self, "culling_bar"):
             self.culling_bar.setVisible(mode == "culling")
         if self.import_button is not None:
-            self.import_button.setText("Add" if mode == "add" else "Import")
+            self.import_button.setText(self._commit_label())
 
     def _build_import_bottom_bar(self) -> QWidget:
         bar = QWidget()
@@ -565,20 +557,45 @@ class ImportDialog(QDialog):
     def _refresh_import_summary(self) -> None:
         if self.import_status_label is None:
             return
-        text = import_status_text(len(self.image_files), len(self.selected_images), byte_total(self.image_files))
+        selected = self.selected_images
+        text = import_status_text(len(self.image_files), len(selected), byte_total(selected))
         self.import_status_label.setText(text)
+        self._sync_import_button()
 
     def bind_catalog(self, catalog: Path | None) -> None:
         self._bound_catalog = catalog
 
+    def _commit_label(self) -> str:
+        if self._import_mode == "add":
+            return "Add"
+        if self._import_mode == "move":
+            return "Move"
+        return "Copy"
+
+    def _sync_import_button(self) -> None:
+        if self.import_button is None:
+            return
+        self.import_button.setEnabled(bool(self.selected_images) and not self.is_importing)
+
     def _add_selection_to_catalog(self) -> None:
         if not self.selected_images:
-            QMessageBox.information(self, "Add", "Please select at least one image to add.")
             return
-        count = self._recorded_count()
-        if count is None:
+        if self._bound_catalog is None:
+            QMessageBox.warning(self, "Add", "Open a catalog before importing.")
             return
-        self.import_status_label.setText(f"Added {count} photos to the catalog.")
+        self._add_each()
+
+    def _add_each(self) -> None:
+        total = len(self.selected_images)
+        done = 0
+        for path in list(self.selected_images):
+            done += import_originals(self._bound_catalog, [path])
+            self._show_add_progress(done, total)
+
+    def _show_add_progress(self, done: int, total: int) -> None:
+        if self.import_status_label is None:
+            return
+        self.import_status_label.setText(f"Added {done}/{total}")
 
     def _recorded_count(self) -> int | None:
         try:
@@ -594,6 +611,11 @@ class ImportDialog(QDialog):
 
     def _record_original(self, path: Path) -> None:
         self._record_originals([path])
+
+    def _place_original(self, source: Path, destination: Path) -> Path:
+        if self._import_mode == "move":
+            return move_original(source, destination)
+        return copy_original(source, destination)
 
     def _setup_folder_tree(self, parent: QSplitter) -> None:
         left = QWidget()
@@ -2093,7 +2115,6 @@ class ImportDialog(QDialog):
 
         organize_mode = str(dest_settings.get("organize_mode", self.ORGANIZE_OPTIONS[0][0]))
         date_format = str(dest_settings.get("date_format", self.DATE_FORMAT_OPTIONS[0][0]))
-        delete_after_import = bool(dest_settings.get("delete_after_import", False))
 
         # Get IPTC data for import from UI
         ui_iptc_data = self._get_iptc_data_from_ui()
@@ -2114,7 +2135,7 @@ class ImportDialog(QDialog):
                 target_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                 try:
-                    shutil.copy2(source_path, target_file_path)
+                    self._place_original(source_path, target_file_path)
                     self._record_original(target_file_path)
                     self._write_target_xmp(source_path, target_file_path)
 
@@ -2147,8 +2168,6 @@ class ImportDialog(QDialog):
                 self.import_status_label.setText(f"Import cancelled after {len(imported_sources)} item(s).")
                 QMessageBox.information(self, "Import", f"Import cancelled. {len(imported_sources)} images imported.")
             else:
-                if delete_after_import:
-                    self._delete_imported_sources(imported_sources)
                 self.import_status_label.setText(f"Import complete: {len(imported_sources)} item(s) imported.")
                 QMessageBox.information(self, "Import", f"Successfully imported {len(imported_sources)} image(s).")
 
@@ -2160,7 +2179,7 @@ class ImportDialog(QDialog):
         finally:
             self.is_importing = False
             self.import_cancel_requested = False
-            self.import_button.setEnabled(True)
+            self._sync_import_button()
 
     def _build_import_target_path(self, source_path: Path, target_root: Path, sequence_number: int,
                                   organize_mode: str, date_format: str) -> Path:

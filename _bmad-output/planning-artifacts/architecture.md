@@ -59,7 +59,7 @@ WAL mode is on. The UI opens one connection. Writes go through `src/catalog`. Wi
 
 The Library grid and the Develop filmstrip list index images from the open Catalog. An empty `previews/` directory leaves both empty. They do not scan a disk folder or the application config for Photos.
 
-Import, whether Add or Copy, records each resulting file in the open Catalog and writes `previews/{photo_id}.jpg`. A legacy single-file Catalog stores that cache in a sibling folder named `<file>.previews`. `src/importing` does not import Qt.
+Import, whether Add, Copy, or Move, records each resulting file in the open Catalog and writes `previews/{photo_id}.jpg`. Copy leaves the source in place. Move removes the source only after the destination file exists and its size matches. A legacy single-file Catalog stores that cache in a sibling folder named `<file>.previews`. The folder walk lives in `src/importing` and runs off the UI thread. `src/importing` does not import Qt.
 
 ### ADR-3 — Originals are read-only
 
