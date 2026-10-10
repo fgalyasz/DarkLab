@@ -291,6 +291,24 @@ So that a bad quit does not cost the cull.
 **When** backup runs
 **Then** the open Catalog still opens and still has its Photos
 
+### Story 1.6: Group Copy, Move, and Add
+
+As a Photographer,
+I want Copy, Move, and Add to read as one choice,
+So that Add is not a separate command from the other ways a file enters the Catalog.
+
+**Acceptance Criteria:**
+
+**Given** the Import top bar
+**When** it is shown
+**Then** Copy, Move, and Add are one row, in that order
+**And** Assisted Culling sits outside that row
+
+**Given** Add is selected
+**When** the bar is shown
+**Then** the caption is visible under that row
+**And** another mode hides the caption
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.

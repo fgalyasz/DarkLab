@@ -214,6 +214,16 @@ class LightroomShellTests(unittest.TestCase):
         self.assertEqual(dialog.import_button.text(), "Move")
         dialog._set_import_mode("add")
         self.assertEqual(dialog.import_button.text(), "Add")
+        self.assertTrue(dialog.add_hint.isVisible())
+        methods = dialog._mode_buttons["import"].parentWidget()
+        method_row = methods.layout().itemAt(0).layout()
+        titles = [method_row.itemAt(index).widget().text() for index in range(method_row.count())]
+        self.assertEqual(titles, ["Copy", "Move", "Add"])
+        self.assertIs(dialog._mode_buttons["move"].parentWidget(), methods)
+        self.assertIs(dialog._mode_buttons["add"].parentWidget(), methods)
+        self.assertIsNot(dialog._mode_buttons["culling"].parentWidget(), methods)
+        dialog._set_import_mode("move")
+        self.assertFalse(dialog.add_hint.isVisible())
         dialog.close()
 
 

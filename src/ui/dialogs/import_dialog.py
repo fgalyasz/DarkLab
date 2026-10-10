@@ -426,29 +426,49 @@ class ImportDialog(QDialog):
         bar.setFixedHeight(52)
         row = QHBoxLayout(bar)
         row.setContentsMargins(10, 4, 12, 4)
-        self.source_button = QPushButton("Select a source")
-        self.source_button.clicked.connect(self._focus_source_tree)
-        row.addWidget(self.source_button)
-        row.addWidget(self._plain_button("→", self._advance_source))
+        self._add_source_controls(row)
         row.addStretch()
-        row.addWidget(self._mode_button("import", "Copy"))
-        row.addWidget(self._mode_button("move", "Move"))
-        row.addWidget(self._mode_button("culling", "Assisted Culling"))
-        row.addWidget(self._add_mode_box())
+        self._add_mode_controls(row)
         row.addStretch()
         row.addWidget(QLabel("DarkLab Catalog"))
         return bar
 
-    def _add_mode_box(self) -> QWidget:
-        box = QWidget()
-        layout = QVBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self._mode_button("add", "Add"))
+    def _add_source_controls(self, row: QHBoxLayout) -> None:
+        self.source_button = QPushButton("Select a source")
+        self.source_button.clicked.connect(self._focus_source_tree)
+        row.addWidget(self.source_button)
+        row.addWidget(self._plain_button("→", self._advance_source))
+
+    def _add_mode_controls(self, row: QHBoxLayout) -> None:
+        row.addWidget(self._import_method_group(), alignment=Qt.AlignmentFlag.AlignTop)
+        row.addSpacing(24)
+        culling = self._mode_button("culling", "Assisted Culling")
+        row.addWidget(culling, alignment=Qt.AlignmentFlag.AlignTop)
+
+    def _import_method_group(self) -> QWidget:
+        group = QWidget()
+        column = QVBoxLayout(group)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addLayout(self._import_method_row())
+        column.addWidget(self._add_hint_label())
+        return group
+
+    def _import_method_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        row.addWidget(self._mode_button("import", "Copy"))
+        row.addWidget(self._mode_button("move", "Move"))
+        row.addWidget(self._mode_button("add", "Add"))
+        return row
+
+    def _add_hint_label(self) -> QLabel:
         self.add_hint = QLabel("Add photos to catalog without moving them")
+        self.add_hint.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.add_hint.setStyleSheet("color: rgb(150, 150, 150); font-size: 10px;")
-        layout.addWidget(self.add_hint)
-        return box
+        self.add_hint.setVisible(False)
+        return self.add_hint
 
     def _mode_button(self, mode: str, title: str) -> QPushButton:
         button = QPushButton(title)
@@ -458,6 +478,10 @@ class ImportDialog(QDialog):
         button.clicked.connect(self._on_mode_clicked)
         self._mode_buttons[mode] = button
         return button
+
+    def _show_add_hint(self, mode: str) -> None:
+        if hasattr(self, "add_hint"):
+            self.add_hint.setVisible(mode == "add")
 
     def _on_mode_clicked(self) -> None:
         button = self.sender()
@@ -470,6 +494,7 @@ class ImportDialog(QDialog):
             button.setChecked(key == mode)
         if hasattr(self, "culling_bar"):
             self.culling_bar.setVisible(mode == "culling")
+        self._show_add_hint(mode)
         if self.import_button is not None:
             self.import_button.setText(self._commit_label())
 

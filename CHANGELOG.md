@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Import keeps Copy, Move, and Add in one row. Assisted Culling sits apart from that choice. The Add caption appears only while Add is selected.
 - Import skips a photograph whose contents are already in the catalog. The same file is never added twice. "Import duplicates as new photos" records a second copy at a different path. A skip does not change the existing photograph and does not copy or move the file.
 - Import shows the selected count and size, and the commit button stays off until something is selected. Copy leaves the originals in place. Move removes an original only after the copy matches its size.
 - Importing photographs writes an index image into the open catalog, and the Library grid shows those images when the import dialog closes.
