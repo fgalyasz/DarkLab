@@ -309,8 +309,8 @@ class ImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Import Photos")
-        self.setMinimumSize(1600, 800)  # Increased minimum to ensure panels fit
-        self.resize(1800, 900)  # Larger default size
+        self.setMinimumSize(1100, 680)
+        self.resize(1280, 800)
 
         self.config_manager = ConfigManager()
         self.current_folder: Optional[Path] = None
@@ -393,6 +393,7 @@ class ImportDialog(QDialog):
         layout.addWidget(self._build_import_splitter(), 1)
         layout.addWidget(self._build_import_bottom_bar())
         self._set_import_mode("import")
+        self._show_saved_destination()
         self._setup_selection_shortcuts()
         self._sync_center_view()
         self._refresh_import_summary()
@@ -495,6 +496,7 @@ class ImportDialog(QDialog):
         if hasattr(self, "culling_bar"):
             self.culling_bar.setVisible(mode == "culling")
         self._show_add_hint(mode)
+        self._show_destination_section(mode)
         if self.import_button is not None:
             self.import_button.setText(self._commit_label())
 
@@ -533,9 +535,7 @@ class ImportDialog(QDialog):
         row.addWidget(self.columns_value_label)
 
     def _add_import_actions(self, row: QHBoxLayout) -> None:
-        row.addWidget(self._create_import_preset_widget())
         self.import_button = self._import_action_button()
-        row.addWidget(self._plain_button("Done", self.reject))
         row.addWidget(self._plain_button("Cancel", self.reject))
         row.addWidget(self.import_button)
 
@@ -1209,10 +1209,63 @@ class ImportDialog(QDialog):
     # ===== Import Settings Methods =====
 
     def _render_import_sections(self, parent_layout: QVBoxLayout) -> None:
-        """Render import settings sections"""
-        parent_layout.addWidget(CollapsibleSection("File Handling", self._file_handling_stack()))
-        parent_layout.addWidget(CollapsibleSection("Apply During Import", self._create_iptc_widget()))
+        self.destination_section = CollapsibleSection("Destination", self._destination_panel())
+        parent_layout.addWidget(self.destination_section)
         parent_layout.addStretch()
+
+    def _destination_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
+        layout.addWidget(QLabel("Copy and Move place the files in this folder."))
+        self.destination_path = QLineEdit()
+        self.destination_path.setReadOnly(True)
+        layout.addWidget(self.destination_path)
+        layout.addWidget(self._plain_button("Choose Folder", self._choose_destination_folder))
+        return panel
+
+    def _show_destination_section(self, mode: str) -> None:
+        if hasattr(self, "destination_section"):
+            self.destination_section.setVisible(mode in {"import", "move"})
+
+    def _choose_destination_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Destination Folder", self.destination_path.text())
+        if folder:
+            self._store_destination(folder)
+
+    def _store_destination(self, folder: str) -> None:
+        self.destination_path.setText(folder)
+        import_config = self._get_import_config()
+        self._write_destination(import_config, folder)
+        self._save_import_config(import_config)
+
+    def _write_destination(self, import_config: dict[str, object], folder: str) -> None:
+        preset = self._blank_destination()
+        preset["target_root"] = folder
+        name = self.DEFAULT_DESTINATION_PRESET_NAME
+        import_config[self.DESTINATION_PRESET_LIST_KEY] = {name: preset}
+        import_config[self.DESTINATION_PRESET_ACTIVE_KEY] = name
+        settings = self._normalize_import_settings(import_config.get(self.IMPORT_SETTINGS_KEY))
+        settings["target_root"] = folder
+        settings["organize_mode"] = "one_folder"
+        import_config[self.IMPORT_SETTINGS_KEY] = settings
+
+    def _blank_destination(self) -> dict[str, object]:
+        return {
+            "target_root": "",
+            "organize_mode": "one_folder",
+            "date_format": self.DATE_FORMAT_OPTIONS[0][0],
+            "delete_after_import": False,
+        }
+
+    def _show_saved_destination(self) -> None:
+        import_config = self._get_import_config()
+        active = str(import_config.get(self.DESTINATION_PRESET_ACTIVE_KEY, self.DEFAULT_DESTINATION_PRESET_NAME))
+        presets = import_config.get(self.DESTINATION_PRESET_LIST_KEY, {})
+        chosen = presets.get(active, {}) if isinstance(presets, dict) else {}
+        root = str(chosen.get("target_root", "")) if isinstance(chosen, dict) else ""
+        self.destination_path.setText(root)
 
     def _file_handling_stack(self) -> QWidget:
         widget = QWidget()

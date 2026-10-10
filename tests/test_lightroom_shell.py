@@ -224,6 +224,15 @@ class LightroomShellTests(unittest.TestCase):
         self.assertIsNot(dialog._mode_buttons["culling"].parentWidget(), methods)
         dialog._set_import_mode("move")
         self.assertFalse(dialog.add_hint.isVisible())
+        self.assertTrue(dialog.destination_section.isVisible())
+        dialog._set_import_mode("add")
+        self.assertFalse(dialog.destination_section.isVisible())
+        self.assertIsNone(dialog.preset_combo)
+        stored: dict[str, object] = {}
+        dialog._write_destination(stored, "/shoots/out")
+        presets = stored["destination_presets"]
+        self.assertEqual(presets["Default"]["target_root"], "/shoots/out")
+        self.assertEqual(presets["Default"]["organize_mode"], "one_folder")
         dialog.close()
 
 

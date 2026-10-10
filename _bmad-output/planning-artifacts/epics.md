@@ -309,6 +309,28 @@ So that Add is not a separate command from the other ways a file enters the Cata
 **Then** the caption is visible under that row
 **And** another mode hides the caption
 
+### Story 1.7: A usable Import window
+
+As a Photographer,
+I want Import to show only the choice I am making,
+So that presets, renaming, and metadata do not bury the files.
+
+**Acceptance Criteria:**
+
+**Given** Copy or Move
+**When** Import opens
+**Then** the side panel is a destination folder and a Choose Folder button
+**And** the chosen folder is where the files are placed, in one folder
+
+**Given** Add
+**When** Import opens
+**Then** the destination panel is hidden
+
+**Given** the bottom bar
+**When** Import opens
+**Then** it has the summary, the duplicate choice, and Cancel plus the commit button
+**And** it does not offer an import-preset manager
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.
