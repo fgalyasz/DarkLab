@@ -2,7 +2,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, Qt, QThreadPool, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, QThreadPool, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -99,9 +99,7 @@ class LibraryBrowserPanel(BasePanel):
         root.addWidget(self._workspace(), 1)
         root.addWidget(self._build_filmstrip())
         root.addWidget(self._build_toolbar())
-        self._bind_removal_keys()
-        self._populate_folders()
-        self._load_all_photographs()
+        self._finish_library()
 
     def _workspace(self) -> QSplitter:
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -525,10 +523,32 @@ class LibraryBrowserPanel(BasePanel):
         self.loupe_button.setChecked(view == "loupe")
         self._paint_previews()
 
+    def _finish_library(self) -> None:
+        self._bind_removal_keys()
+        self._populate_folders()
+        self._load_all_photographs()
+        self.grid_scroll.viewport().installEventFilter(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if self._viewport_resized(watched, event):
+            QTimer.singleShot(0, self._apply_grid)
+        return super().eventFilter(watched, event)
+
+    def _viewport_resized(self, watched: QObject, event: QEvent) -> bool:
+        scroll = getattr(self, "grid_scroll", None)
+        if scroll is None:
+            return False
+        return watched is scroll.viewport() and event.type() == QEvent.Type.Resize
+
     def _apply_grid(self) -> None:
-        columns = max(2, 12 - self.thumb_slider.value())
-        width = max(240, self.grid_scroll.viewport().width())
-        cell = max(90, (width - (columns - 1) * 8) // columns)
+        if not hasattr(self, "thumb_slider"):
+            return
+        columns, cell = thumb_cell(self.thumb_slider.value(), self.grid_scroll.viewport().width())
+        self._fit_grid(columns, cell)
+
+    def _fit_grid(self, columns: int, cell: int) -> None:
+        if self.grid.columns == columns and self.grid.cell_width == cell:
+            return
         self.grid.set_grid_layout(columns, cell, int(cell * 1.08) + 42, 8, 0, 0)
 
     def _update_status(self) -> None:
@@ -658,6 +678,12 @@ def _folder_name(path: Path) -> str:
 def _subfolders(path: Path) -> list[Path]:
     folders = [entry for entry in path.iterdir() if entry.is_dir() and not entry.name.startswith(".")]
     return sorted(folders, key=_folder_name)
+
+
+def thumb_cell(slider_value: int, viewport_width: int) -> tuple[int, int]:
+    columns = max(2, 12 - slider_value)
+    width = max(240, viewport_width)
+    return columns, max(90, (width - (columns - 1) * 8) // columns)
 
 
 def _scroll(widget: QWidget) -> QScrollArea:

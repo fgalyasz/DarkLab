@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Library Thumbnails slider and the index images match when the Library opens. Moving the slider changes that size.
 - Removing an index image clears the Navigator. The deleted photograph no longer stays on that preview.
 - Library can remove index images from the catalog. The choice is to delete only the index image, or to delete the original file from disk as well.
 - The Import side panel stays within its width. Long names and the metadata note wrap instead of opening a horizontal scrollbar.

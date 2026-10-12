@@ -128,6 +128,25 @@ class LightroomShellTests(unittest.TestCase):
             window.panels["library"]._cancel_load()
             window.close()
 
+    def test_thumb_cell_grows_toward_the_right(self) -> None:
+        from src.ui.panels.library_browser_panel import thumb_cell
+        small = thumb_cell(2, 900)
+        large = thumb_cell(10, 900)
+        self.assertEqual(small[0], 10)
+        self.assertEqual(large[0], 2)
+        self.assertGreater(large[1], small[1])
+
+    def test_thumb_cell_floors_a_narrow_view(self) -> None:
+        from src.ui.panels.library_browser_panel import thumb_cell
+        self.assertEqual(thumb_cell(6, 0), (6, 90))
+
+    def test_index_size_matches_the_thumbnail_slider(self) -> None:
+        panel = shown_library()
+        self.assertEqual(grid_cell(panel), expected_cell(panel))
+        panel.thumb_slider.setValue(panel.thumb_slider.maximum())
+        self.assertEqual(grid_cell(panel), expected_cell(panel))
+        close_library(panel)
+
     def test_library_grid_lists_catalog_index_images(self) -> None:
         from src.catalog.index_images import write_index_image
         from src.ui.panels.library_browser_panel import LibraryBrowserPanel
@@ -290,6 +309,49 @@ class LightroomShellTests(unittest.TestCase):
         self.assertEqual(presets["Default"]["target_root"], "/shoots/out")
         self.assertEqual(presets["Wedding"]["target_root"], "/a")
         dialog.close()
+
+
+def shown_library():
+    from PyQt6.QtWidgets import QApplication
+    panel = prepared_library()
+    host = library_host(panel)
+    host.resize(1516, 1102)
+    host.show()
+    QApplication.processEvents()
+    panel._host = host
+    return panel
+
+
+def prepared_library():
+    from src.ui.panels.library_browser_panel import LibraryBrowserPanel
+    panel = LibraryBrowserPanel()
+    panel.catalog.setCurrentRow(0)
+    return panel
+
+
+def library_host(panel):
+    from PyQt6.QtWidgets import QMainWindow, QStackedWidget
+    window = QMainWindow()
+    stack = QStackedWidget()
+    stack.addWidget(panel)
+    window.setCentralWidget(stack)
+    return window
+
+
+def grid_cell(panel) -> tuple[int, int]:
+    return panel.grid.columns, panel.grid.cell_width
+
+
+def expected_cell(panel) -> tuple[int, int]:
+    from src.ui.panels.library_browser_panel import thumb_cell
+    width = panel.grid_scroll.viewport().width()
+    return thumb_cell(panel.thumb_slider.value(), width)
+
+
+def close_library(panel) -> None:
+    panel._cancel_load()
+    panel._host.close()
+    panel.close()
 
 
 def sample_catalog() -> Path:

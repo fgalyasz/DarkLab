@@ -397,6 +397,22 @@ So that I do not keep looking at a photograph that has left the Catalog.
 **Then** the Navigator pixmap is cleared
 **And** it says that no photograph is selected
 
+### Story 1.12: Match index image size to the thumbnail slider
+
+As a Photographer,
+I want the index images to open at the Thumbnails slider size,
+So that the grid matches the control I see.
+
+**Acceptance Criteria:**
+
+**Given** the Library opens with the Thumbnails slider at its starting position
+**When** the grid is shown
+**Then** the index image size is the size that position selects
+
+**Given** the Library is open
+**When** the Thumbnails slider moves
+**Then** the index image size follows the new position
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.
