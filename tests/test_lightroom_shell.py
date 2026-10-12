@@ -144,6 +144,7 @@ class LightroomShellTests(unittest.TestCase):
         panel.close()
 
     def test_library_removes_an_index_without_the_original(self) -> None:
+        from PyQt6.QtGui import QPixmap
         from src.catalog.index_images import list_index_images
         from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
         from src.ui.panels.library_browser_panel import LibraryBrowserPanel
@@ -154,9 +155,13 @@ class LightroomShellTests(unittest.TestCase):
         panel._selected = list(list_index_images(catalog))
         panel._update_status()
         self.assertTrue(panel.remove_button.isEnabled())
+        panel.navigator.setPixmap(QPixmap(8, 6))
+        self.assertFalse(panel.navigator.pixmap().isNull())
         panel._remove_selected(False)
         self.assertEqual(panel.grid.images, [])
         self.assertTrue(original.is_file())
+        self.assertTrue(panel.navigator.pixmap().isNull())
+        self.assertEqual(panel.navigator.text(), "No photo selected")
         choice = RemovalChoiceDialog(None, 2)
         self.assertEqual(choice.index_button.text(), "Delete index image only")
         self.assertEqual(choice.original_button.text(), "Also delete the original from disk")

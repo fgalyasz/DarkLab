@@ -384,6 +384,19 @@ So that I can choose whether the Original file stays on disk.
 **When** that choice runs
 **Then** the Photo and its index image stay
 
+### Story 1.11: Clear the Navigator after removal
+
+As a Photographer,
+I want the Navigator to drop a removed index image,
+So that I do not keep looking at a photograph that has left the Catalog.
+
+**Acceptance Criteria:**
+
+**Given** the Navigator is showing a selected index image
+**When** that index image is removed
+**Then** the Navigator pixmap is cleared
+**And** it says that no photograph is selected
+
 ## Epic 2: Library culling
 
 A Photographer can see the shoot, mark selects, and filter to them.

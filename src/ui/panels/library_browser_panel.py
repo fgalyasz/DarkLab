@@ -349,6 +349,7 @@ class LibraryBrowserPanel(BasePanel):
     def _show_paths(self, paths: list[Path]) -> None:
         self._images = list(paths)
         self._selected = []
+        self._clear_selection_panels()
         self._refresh_grid()
         self._start_thumbs()
 
@@ -445,10 +446,15 @@ class LibraryBrowserPanel(BasePanel):
     def _clear_selection_panels(self) -> None:
         self._active_path = ""
         self._navigator_image = QImage()
-        self.navigator.setText("No photo selected")
-        self.histogram.clear_histogram()
+        self._paint_previews()
+        self._clear_file_fields()
+        self._load_notes("")
+
+    def _clear_file_fields(self) -> None:
         self.meta_name.setText("-")
         self.meta_folder.setText("-")
+        self.meta_size.setText("-")
+        self.meta_modified.setText("-")
 
     def _image_for(self, path: Path) -> QImage:
         pixmap = self._thumbs.get(path)
@@ -664,6 +670,7 @@ def _scroll(widget: QWidget) -> QScrollArea:
 
 def _show_pixmap(label: QLabel, image: QImage, size) -> None:
     if image.isNull() or size.width() < 2 or size.height() < 2:
+        label.setPixmap(QPixmap())
         label.setText("No photo selected")
         return
     pixmap = QPixmap.fromImage(image)
