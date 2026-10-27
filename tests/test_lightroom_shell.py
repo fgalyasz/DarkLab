@@ -125,6 +125,34 @@ class LightroomShellTests(unittest.TestCase):
             self.assertIn("New &Catalog...", titles)
             self.assertIn("&Open Catalog...", titles)
             self.assertIn("Catalog &Settings...", titles)
+            self.assertIn("&Back Up Catalog", titles)
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_back_up_without_a_catalog_does_nothing(self) -> None:
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = None
+            with patch("src.ui.main_window.backup_catalog") as backup:
+                window._back_up_catalog()
+            backup.assert_not_called()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_back_up_reports_success_and_failure(self) -> None:
+        from src.catalog.backup import BackupError
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = Path("/shoots/a.darklab")
+            with patch("src.ui.main_window.QMessageBox") as box:
+                with patch("src.ui.main_window.backup_catalog", return_value=Path("/b/a.darklab")):
+                    window._back_up_catalog()
+                box.information.assert_called_once()
+                with patch("src.ui.main_window.backup_catalog", side_effect=BackupError("denied")):
+                    window._back_up_catalog()
+                box.warning.assert_called_once()
             window.panels["library"]._cancel_load()
             window.close()
 

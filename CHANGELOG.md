@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- File → Back Up Catalog writes a timestamped copy (database, previews, settings) beside the catalog. A backup is a catalog folder, so Open Catalog restores it, and restoring never touches the originals. If the destination cannot be written, the open catalog is left as it was and the error is shown.
 - A photograph whose original was removed outside DarkLab stays in the Library and shows a MISSING badge. Relinking to a file with the same contents clears the badge and keeps the Develop Settings; a different file needs an explicit confirmation.
 - Develop Settings can be written to an XMP sidecar next to the original under a DarkLab namespace. Writing leaves the original untouched and keeps tags from other applications. Importing the same original into a new catalog restores those settings.
 - The Library Thumbnails slider and the index images match when the Library opens. Moving the slider changes that size.

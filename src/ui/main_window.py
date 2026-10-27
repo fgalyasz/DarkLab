@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
+from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.startup_policy import plan_startup, require_catalog
 from src.config.config_manager import ConfigManager
@@ -201,7 +202,20 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._open_catalog_dialog)
         settings_action = file_menu.addAction("Catalog &Settings...")
         settings_action.triggered.connect(self._edit_catalog_settings)
+        backup_action = file_menu.addAction("&Back Up Catalog")
+        backup_action.triggered.connect(self._back_up_catalog)
         file_menu.addSeparator()
+
+    def _back_up_catalog(self) -> None:
+        if self.catalog_path is None:
+            return
+        try:
+            backup = backup_catalog(self.catalog_path, default_backup_root(self.catalog_path))
+        except BackupError as error:
+            self.logger.error("Backup failed: %s", error)
+            QMessageBox.warning(self, "Back Up Catalog", str(error))
+            return
+        QMessageBox.information(self, "Back Up Catalog", f"Backup written to {backup}")
 
     def _create_catalog(self) -> None:
         path = _selected_path(self._choose_save_path())
