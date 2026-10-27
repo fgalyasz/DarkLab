@@ -12,6 +12,7 @@ PHOTO_TABLE = (
     "(id INTEGER PRIMARY KEY, original_path TEXT, content_hash TEXT)"
 )
 ADD_HASH = "ALTER TABLE photos ADD COLUMN content_hash TEXT"
+ADD_SETTINGS = "ALTER TABLE photos ADD COLUMN develop_settings TEXT"
 FOLDERS_TABLE = (
     "CREATE TABLE IF NOT EXISTS folders "
     "(id INTEGER PRIMARY KEY, folder_path TEXT NOT NULL UNIQUE)"
@@ -39,7 +40,8 @@ def apply_schema(path: Path) -> None:
     connection = sqlite3.connect(path)
     try:
         _create_tables(connection)
-        _ensure_hash_column(connection)
+        _ensure_column(connection, ADD_HASH)
+        _ensure_column(connection, ADD_SETTINGS)
     finally:
         connection.close()
 
@@ -52,9 +54,9 @@ def _create_tables(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
-def _ensure_hash_column(connection: sqlite3.Connection) -> None:
+def _ensure_column(connection: sqlite3.Connection, statement: str) -> None:
     try:
-        connection.execute(ADD_HASH)
+        connection.execute(statement)
         connection.commit()
     except sqlite3.OperationalError as error:
         connection.rollback()

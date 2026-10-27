@@ -8,11 +8,13 @@ import rawpy
 from PIL import Image, UnidentifiedImageError
 
 from src.catalog.database import apply_schema
+from src.catalog.develop_settings import write_develop_settings
 from src.catalog.file_hash import content_hash
 from src.catalog.folders import add_imported_folder
 from src.catalog.index_images import write_index_image
 from src.catalog.locations import database_file
 from src.catalog.photos import add_photo, fill_missing_hashes, known_content
+from src.catalog.sidecar import read_sidecar
 
 logger = logging.getLogger(__name__)
 INDEX_EDGE = 360
@@ -39,7 +41,14 @@ def import_original(catalog: Path, original: Path, allow_duplicate: bool = False
     if photo_id is None:
         return None
     add_imported_folder(catalog, original.parent)
+    _restore_sidecar_settings(catalog, photo_id, original)
     return write_index_image(catalog, photo_id, index_jpeg(original))
+
+
+def _restore_sidecar_settings(catalog: Path, photo_id: int, original: Path) -> None:
+    settings = read_sidecar(original)
+    if settings:
+        write_develop_settings(catalog, photo_id, settings)
 
 
 def index_jpeg(original: Path) -> bytes:

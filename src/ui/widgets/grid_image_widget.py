@@ -23,6 +23,7 @@ class GridImageWidget(QWidget):
         self.images: List[Path] = []
         self.thumbnails: Dict[Path, QPixmap] = {}
         self.image_markers: Dict[Path, Dict[str, str]] = {}
+        self.missing_images: set[Path] = set()
         self.selected_images: List[Path] = []
         self.hovered_index: int = -1
         self.hovered_rating: int = 0  # Hover rating for star interaction
@@ -75,6 +76,10 @@ class GridImageWidget(QWidget):
         if image_path in self.images:
             self.thumbnails[image_path] = thumbnail
             self.update()
+
+    def set_missing_images(self, missing: set[Path]) -> None:
+        self.missing_images = set(missing)
+        self.update()
 
     def set_image_markers(self, markers: Dict[Path, Dict[str, str]]) -> None:
         """Set per-image marker properties for painting overlays."""
@@ -207,6 +212,16 @@ class GridImageWidget(QWidget):
             elided_text = fm.elidedText(image_path.name, Qt.TextElideMode.ElideMiddle, text_rect.width())
             painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, elided_text)
             self._paint_markers(painter, image_path, cell_rect, bg_color)
+            self._paint_missing_badge(painter, image_path, cell_rect)
+
+    def _paint_missing_badge(self, painter: QPainter, image_path: Path, cell_rect: QRect) -> None:
+        if image_path not in self.missing_images:
+            return
+        badge = QRect(cell_rect.x() + 8, cell_rect.y() + 8, 58, 16)
+        painter.fillRect(badge, QColor(190, 60, 60))
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.setFont(QFont("", 8))
+        painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, "MISSING")
 
     def _paint_markers(self, painter: QPainter, image_path: Path, cell_rect: QRect, bg_color: QColor) -> None:
         marker_data = self.image_markers.get(image_path, {})

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A photograph whose original was removed outside DarkLab stays in the Library and shows a MISSING badge. Relinking to a file with the same contents clears the badge and keeps the Develop Settings; a different file needs an explicit confirmation.
+- Develop Settings can be written to an XMP sidecar next to the original under a DarkLab namespace. Writing leaves the original untouched and keeps tags from other applications. Importing the same original into a new catalog restores those settings.
 - The Library Thumbnails slider and the index images match when the Library opens. Moving the slider changes that size.
 - Removing an index image clears the Navigator. The deleted photograph no longer stays on that preview.
 - Library can remove index images from the catalog. The choice is to delete only the index image, or to delete the original file from disk as well.

@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 
 from src.config.config_manager import ConfigManager
 from src.catalog.index_images import list_index_images
+from src.catalog.missing import missing_index_paths
 from src.catalog.removal import photo_id_of_index, remove_indexes
 from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
@@ -338,6 +339,11 @@ class LibraryBrowserPanel(BasePanel):
             return []
         return list_index_images(self._catalog)
 
+    def _missing_indexes(self) -> set[Path]:
+        if self._catalog is None:
+            return set()
+        return missing_index_paths(self._catalog)
+
     def _load_previous_import(self) -> None:
         self._load_all_photographs()
 
@@ -356,6 +362,7 @@ class LibraryBrowserPanel(BasePanel):
             return
         visible = self._visible_images()
         self.grid.set_images(visible)
+        self.grid.set_missing_images(self._missing_indexes())
         self.filmstrip.set_photos(visible)
         self._restore_thumbs(visible)
         self._apply_grid()
