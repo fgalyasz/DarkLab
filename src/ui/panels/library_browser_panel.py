@@ -1,4 +1,6 @@
+import logging
 import shutil
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -11,7 +13,8 @@ from PyQt6.QtWidgets import (
 )
 
 from src.config.config_manager import ConfigManager
-from src.catalog.index_images import list_index_images
+from src.catalog.index_images import index_image_path, list_index_images
+from src.catalog.marks import read_marks, write_mark
 from src.catalog.missing import missing_index_paths
 from src.catalog.removal import photo_id_of_index, remove_indexes
 from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
@@ -27,6 +30,9 @@ from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
 from src.ui.widgets.grid_image_widget import GridImageWidget
 from src.ui.widgets.histogram_widget import HistogramWidget
+
+
+logger = logging.getLogger(__name__)
 
 
 class ThumbRelay(QObject):
@@ -201,6 +207,7 @@ class LibraryBrowserPanel(BasePanel):
     def _build_grid(self) -> GridImageWidget:
         self.grid = GridImageWidget()
         self.grid.selection_changed.connect(self._on_grid_selection)
+        self.grid.marker_changed.connect(self._on_marker_changed)
         return self.grid
 
     def _quick_develop(self) -> QWidget:
@@ -330,6 +337,25 @@ class LibraryBrowserPanel(BasePanel):
         self._catalog = catalog
         self._load_all_photographs()
 
+    def _catalog_markers(self) -> dict[Path, dict[str, str]]:
+        if self._catalog is None:
+            return {}
+        catalog = self._catalog
+        return {index_image_path(catalog, photo_id): marks for photo_id, marks in read_marks(catalog).items()}
+
+    def _load_markers(self) -> None:
+        if hasattr(self, "grid"):
+            self.grid.set_image_markers(self._catalog_markers())
+
+    def _on_marker_changed(self, path: Path, kind: str, value: str) -> None:
+        photo_id = photo_id_of_index(Path(path))
+        if self._catalog is None or photo_id is None:
+            return
+        try:
+            write_mark(self._catalog, photo_id, kind, value)
+        except (sqlite3.Error, ValueError) as error:
+            logger.error("Could not save %s=%s for photo %s: %s", kind, value, photo_id, error)
+
     def _load_all_photographs(self) -> None:
         self._cancel_load()
         self._show_paths(self._catalog_indexes())
@@ -352,6 +378,7 @@ class LibraryBrowserPanel(BasePanel):
 
     def _show_paths(self, paths: list[Path]) -> None:
         self._images = list(paths)
+        self._load_markers()
         self._selected = []
         self._clear_selection_panels()
         self._refresh_grid()

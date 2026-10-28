@@ -16,7 +16,9 @@ from src.ui.develop_sections import (
     tone_curve_panel, transform_panel,
 )
 from src.catalog.index_images import list_index_images
+from src.catalog.marks import read_photo_marks
 from src.catalog.removal import photo_id_of_index
+from src.develop.mark_text import marks_text
 from src.develop.tone_settings import TONE_KEYS
 from src.develop.tone_store import load_tone, save_tone
 from src.ui.dialogs.import_dialog import ImageProcessorRunnable
@@ -93,9 +95,11 @@ class DevelopPanel(BasePanel):
         layout.setSpacing(4)
         self.filename_label = _info_label(16)
         self.exposure_label = _info_label(11)
+        self.marks_label = _info_label(12)
         self.preview = _empty_preview("Select a photo.")
         layout.addWidget(self.filename_label)
         layout.addWidget(self.exposure_label)
+        layout.addWidget(self.marks_label)
         layout.addWidget(self.preview, 1)
         layout.addWidget(self._center_toolbar())
         return column
@@ -249,6 +253,17 @@ class DevelopPanel(BasePanel):
     def _on_filmstrip(self, path: str) -> None:
         self._show_photo(Path(path))
 
+    def _show_marks(self) -> None:
+        photo_id = self._current_photo_id()
+        if photo_id is None or self._catalog is None:
+            self.marks_label.setText("")
+            return
+        self.marks_label.setText(marks_text(read_photo_marks(self._catalog, photo_id)))
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._show_marks()
+
     def _flush_tone(self) -> None:
         if self._save_timer.isActive():
             self._save_tone()
@@ -261,6 +276,7 @@ class DevelopPanel(BasePanel):
         self._flush_tone()
         self._current = path
         self._load_tone(path)
+        self._show_marks()
         self.filename_label.setText(path.name)
         self.exposure_label.setText(read_exposure_text(path))
         image = QImage(str(path))

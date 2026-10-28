@@ -13,6 +13,9 @@ PHOTO_TABLE = (
 )
 ADD_HASH = "ALTER TABLE photos ADD COLUMN content_hash TEXT"
 ADD_SETTINGS = "ALTER TABLE photos ADD COLUMN develop_settings TEXT"
+ADD_RATING = "ALTER TABLE photos ADD COLUMN rating TEXT"
+ADD_PICK = "ALTER TABLE photos ADD COLUMN pick TEXT"
+ADD_COLOR = "ALTER TABLE photos ADD COLUMN color TEXT"
 FOLDERS_TABLE = (
     "CREATE TABLE IF NOT EXISTS folders "
     "(id INTEGER PRIMARY KEY, folder_path TEXT NOT NULL UNIQUE)"
@@ -42,8 +45,14 @@ def apply_schema(path: Path) -> None:
         _create_tables(connection)
         _ensure_column(connection, ADD_HASH)
         _ensure_column(connection, ADD_SETTINGS)
+        _ensure_marks(connection)
     finally:
         connection.close()
+
+
+def _ensure_marks(connection: sqlite3.Connection) -> None:
+    for statement in (ADD_RATING, ADD_PICK, ADD_COLOR):
+        _ensure_column(connection, statement)
 
 
 def _create_tables(connection: sqlite3.Connection) -> None:
@@ -71,6 +80,7 @@ def _ignore_duplicate_column(error: sqlite3.OperationalError) -> None:
 def open_catalog(path: Path) -> Path:
     if read_schema(path) is None:
         raise ValueError(f"Not a DarkLab catalog: {path}")
+    apply_schema(database_file(path))
     return path
 
 
