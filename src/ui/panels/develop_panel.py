@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, Qt, QThreadPool
+import logging
+import sqlite3
+
+from PyQt6.QtCore import QObject, Qt, QThreadPool, QTimer
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QScrollArea, QSplitter, QVBoxLayout, QWidget, QCheckBox,
@@ -13,6 +16,9 @@ from src.ui.develop_sections import (
     tone_curve_panel, transform_panel,
 )
 from src.catalog.index_images import list_index_images
+from src.catalog.removal import photo_id_of_index
+from src.develop.tone_settings import TONE_KEYS
+from src.develop.tone_store import load_tone, save_tone
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
@@ -20,6 +26,10 @@ from src.ui.preview_image import tone_image
 from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
 from src.ui.widgets.histogram_widget import HistogramWidget
+
+
+logger = logging.getLogger(__name__)
+SAVE_DELAY_MS = 400
 
 
 class ThumbRelay(QObject):
@@ -39,6 +49,8 @@ class DevelopPanel(BasePanel):
         self._baseline: list[int] = []
         self._photos: list[Path] = []
         self._current: Path | None = None
+        self._loading = False
+        self._save_timer = _save_timer()
         self._source_image = QImage()
         self._session = 0
         self._relays: list[ThumbRelay] = []
@@ -125,6 +137,7 @@ class DevelopPanel(BasePanel):
         for title, content, expanded in sections:
             layout.addWidget(CollapsibleSection(title, content, expanded=expanded))
         self._bind_preview_sliders()
+        self._bind_tone_persistence()
 
     def _center_toolbar(self) -> QWidget:
         bar = QWidget()
@@ -158,7 +171,40 @@ class DevelopPanel(BasePanel):
             if row.title in ("Exposure", "Contrast"):
                 row.changed.connect(self._paint_preview)
 
+    def _bind_tone_persistence(self) -> None:
+        self._save_timer.timeout.connect(self._save_tone)
+        for row in self._controls.sliders:
+            if row.title in TONE_KEYS:
+                row.changed.connect(self._schedule_save)
+
+    def _schedule_save(self) -> None:
+        if not self._loading:
+            self._save_timer.start(SAVE_DELAY_MS)
+
+    def _save_tone(self) -> None:
+        self._save_timer.stop()
+        photo_id = self._current_photo_id()
+        if photo_id is None or self._catalog is None:
+            return
+        try:
+            save_tone(self._catalog, photo_id, self._controls.named_values(TONE_KEYS))
+        except sqlite3.Error as error:
+            logger.error("Could not save Develop Settings for photo %s: %s", photo_id, error)
+
+    def _current_photo_id(self) -> int | None:
+        if self._current is None:
+            return None
+        return photo_id_of_index(self._current)
+
+    def _load_tone(self, path: Path) -> None:
+        photo_id = photo_id_of_index(path)
+        stored = {} if photo_id is None or self._catalog is None else load_tone(self._catalog, photo_id)
+        self._loading = True
+        self._controls.restore_named(TONE_KEYS, stored)
+        self._loading = False
+
     def show_catalog(self, catalog: Path | None) -> None:
+        self._flush_tone()
         self._catalog = catalog
         self._load_photos()
 
@@ -213,8 +259,18 @@ class DevelopPanel(BasePanel):
     def _on_filmstrip(self, path: str) -> None:
         self._show_photo(Path(path))
 
+    def _flush_tone(self) -> None:
+        if self._save_timer.isActive():
+            self._save_tone()
+
+    def hideEvent(self, event) -> None:
+        self._flush_tone()
+        super().hideEvent(event)
+
     def _show_photo(self, path: Path) -> None:
+        self._flush_tone()
         self._current = path
+        self._load_tone(path)
         self.filename_label.setText(path.name)
         self.exposure_label.setText(read_exposure_text(path))
         image = QImage(str(path))
@@ -258,6 +314,12 @@ class DevelopPanel(BasePanel):
         super().resizeEvent(event)
         if hasattr(self, "preview"):
             self._paint_preview()
+
+
+def _save_timer() -> QTimer:
+    timer = QTimer()
+    timer.setSingleShot(True)
+    return timer
 
 
 def _empty_preview(text: str) -> QLabel:

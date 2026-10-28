@@ -28,6 +28,10 @@ def write_develop_settings(catalog: Path, photo_id: int, settings: dict[str, str
         connection.close()
 
 
+def merge_develop_settings(catalog: Path, photo_id: int, changes: dict[str, str]) -> None:
+    write_develop_settings(catalog, photo_id, {**read_develop_settings(catalog, photo_id), **changes})
+
+
 def _decoded(row: tuple[object, ...] | None) -> dict[str, str]:
     if row is None or row[0] is None:
         return {}

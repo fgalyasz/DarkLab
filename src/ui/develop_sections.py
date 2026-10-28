@@ -47,6 +47,14 @@ class DevelopControls:
         for row, value in zip(self.sliders, values):
             row.set_value(value)
 
+    def named_values(self, titles: tuple[str, ...]) -> dict[str, int]:
+        return {row.title: row.value() for row in self.sliders if row.title in titles}
+
+    def restore_named(self, titles: tuple[str, ...], values: dict[str, int]) -> None:
+        for row in self.sliders:
+            if row.title in titles:
+                row.set_value(values.get(row.title, row.default))
+
 
 def basic_panel(controls: DevelopControls) -> QWidget:
     panel = _panel()

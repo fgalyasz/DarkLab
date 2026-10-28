@@ -20,6 +20,10 @@ class SliderRow(QWidget):
     def set_value(self, value: int) -> None:
         self._slider.setValue(value)
 
+    @property
+    def default(self) -> int:
+        return self._default
+
     def reset(self) -> None:
         self._slider.setValue(self._default)
 
