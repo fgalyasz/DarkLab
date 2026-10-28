@@ -19,7 +19,7 @@ from src.catalog.index_images import list_index_images
 from src.catalog.removal import photo_id_of_index
 from src.develop.tone_settings import TONE_KEYS
 from src.develop.tone_store import load_tone, save_tone
-from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
+from src.ui.dialogs.import_dialog import ImageProcessorRunnable
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.preview_image import tone_image
@@ -54,7 +54,6 @@ class DevelopPanel(BasePanel):
         self._source_image = QImage()
         self._session = 0
         self._relays: list[ThumbRelay] = []
-        self._discovery: ImageDiscoveryThread | None = None
         self._pool = QThreadPool()
         self._pool.setMaxThreadCount(4)
         super().__init__("develop")
@@ -217,15 +216,6 @@ class DevelopPanel(BasePanel):
             return []
         return list_index_images(self._catalog)
 
-    def _load_folder(self, folder: str) -> None:
-        self._cancel_load()
-        self._discovery = ImageDiscoveryThread(folder, recursive=False)
-        self._discovery.discovery_finished.connect(self._on_discovered)
-        self._discovery.start()
-
-    def _on_discovered(self, paths: list[str]) -> None:
-        self._show_paths([Path(path) for path in paths])
-
     def _show_paths(self, paths: list[Path]) -> None:
         self._photos = list(paths)
         self.filmstrip.set_photos(self._photos)
@@ -305,9 +295,6 @@ class DevelopPanel(BasePanel):
     def _cancel_load(self) -> None:
         self._session += 1
         self._relays.clear()
-        if self._discovery and self._discovery.isRunning():
-            self._discovery.cancel()
-            self._discovery.wait(300)
         self._pool.clear()
 
     def resizeEvent(self, event) -> None:
