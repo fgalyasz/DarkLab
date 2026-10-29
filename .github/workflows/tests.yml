@@ -12,6 +12,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # pyexiv2's macOS wheel links libexiv2 against Homebrew inih.
+      - name: Install native deps for pyexiv2
+        run: brew install inih
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests
         env:
