@@ -7,10 +7,11 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from src.catalog.cull_filter import matches_rating
 from src.imaging.preview_tone import tone_channel
 from src.ui.import_summary import format_byte_count, import_status_text
 from src.ui.library_catalog import (
-    existing_paths, filter_paths, keyword_tokens, matches_rating,
+    existing_paths, filter_paths, keyword_tokens,
     merge_catalog_paths, previous_import_directory, sort_paths,
 )
 from src.ui.widgets.histogram_widget import add_rgb_sample, bin_index, empty_channel

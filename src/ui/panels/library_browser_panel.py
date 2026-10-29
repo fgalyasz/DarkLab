@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.config.config_manager import ConfigManager
+from src.catalog.cull_filter import filter_by_marks
 from src.catalog.index_images import index_image_path, list_index_images
 from src.catalog.marks import read_marks, write_mark
 from src.catalog.missing import missing_index_paths
@@ -21,7 +22,7 @@ from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
 from src.ui.library_catalog import (
-    filter_paths, keyword_tokens, matches_rating, pictures_directory, sort_paths,
+    filter_paths, keyword_tokens, pictures_directory, sort_paths,
 )
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
@@ -33,6 +34,23 @@ from src.ui.widgets.histogram_widget import HistogramWidget
 
 
 logger = logging.getLogger(__name__)
+
+PICK_CHOICES = (
+    ("Flag: Any", "any"),
+    ("Picked", "accepted"),
+    ("Rejected", "rejected"),
+    ("Unflagged", "none"),
+)
+COLOR_CHOICES = (
+    ("Color: Any", "any"),
+    ("No color", "none"),
+    ("Red", "red"),
+    ("Orange", "orange"),
+    ("Yellow", "yellow"),
+    ("Green", "green"),
+    ("Blue", "blue"),
+    ("Purple", "purple"),
+)
 
 
 class ThumbRelay(QObject):
@@ -183,9 +201,41 @@ class LibraryBrowserPanel(BasePanel):
         self.filter_edit.setPlaceholderText("Filename")
         self.filter_edit.textChanged.connect(self._refresh_grid)
         self.rating_combo = self._rating_combo()
+        self.pick_combo = self._pick_combo()
+        self.color_combo = self._color_combo()
         row.addWidget(self.filter_edit, 1)
         row.addWidget(self.rating_combo)
+        row.addWidget(self.pick_combo)
+        row.addWidget(self.color_combo)
+        row.addWidget(self._clear_filter_button())
         return bar
+
+    def _pick_combo(self) -> QComboBox:
+        combo = QComboBox()
+        for label, value in PICK_CHOICES:
+            combo.addItem(label, value)
+        combo.currentIndexChanged.connect(self._refresh_grid)
+        return combo
+
+    def _color_combo(self) -> QComboBox:
+        combo = QComboBox()
+        for label, value in COLOR_CHOICES:
+            combo.addItem(label, value)
+        combo.currentIndexChanged.connect(self._refresh_grid)
+        return combo
+
+    def _clear_filter_button(self) -> QPushButton:
+        button = QPushButton("Clear")
+        button.clicked.connect(self._clear_filter)
+        return button
+
+    def _clear_filter(self) -> None:
+        for combo in (self.rating_combo, self.pick_combo, self.color_combo):
+            combo.blockSignals(True)
+            combo.setCurrentIndex(0)
+            combo.blockSignals(False)
+        self.filter_edit.setText("")
+        self._refresh_grid()
 
     def _rating_combo(self) -> QComboBox:
         combo = QComboBox()
@@ -397,12 +447,14 @@ class LibraryBrowserPanel(BasePanel):
 
     def _visible_images(self) -> list[Path]:
         named = filter_paths(self._images, self.filter_edit.text())
-        rated = [path for path in named if self._rating_ok(path)]
-        return sort_paths(rated, str(self.sort_combo.currentData()))
-
-    def _rating_ok(self, path: Path) -> bool:
-        marker = self.grid.image_markers.get(path, {}).get("rating", "0")
-        return matches_rating(str(marker), str(self.rating_combo.currentData()))
+        marked = filter_by_marks(
+            named,
+            self.grid.image_markers,
+            str(self.rating_combo.currentData()),
+            str(self.pick_combo.currentData()),
+            str(self.color_combo.currentData()),
+        )
+        return sort_paths(marked, str(self.sort_combo.currentData()))
 
     def _restore_thumbs(self, paths: list[Path]) -> None:
         for path in paths:

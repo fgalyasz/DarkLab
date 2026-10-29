@@ -41,15 +41,6 @@ def keyword_tokens(text: str) -> list[str]:
     return [chunk.strip() for chunk in chunks if chunk.strip()]
 
 
-def matches_rating(marker: str, minimum: str) -> bool:
-    if minimum == "any":
-        return True
-    try:
-        return int(marker or "0") >= int(minimum)
-    except ValueError:
-        return False
-
-
 def _name_key(path: Path) -> str:
     return path.name.lower()
 
