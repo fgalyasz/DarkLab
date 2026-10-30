@@ -50,13 +50,19 @@ class DevelopControls:
         for row, value in zip(self.sliders, values):
             row.set_value(value)
 
-    def named_values(self, titles: tuple[str, ...]) -> dict[str, int]:
-        return {row.title: row.value() for row in self.sliders if row.title in titles}
-
-    def restore_named(self, titles: tuple[str, ...], values: dict[str, int]) -> None:
+    def first_named(self, titles: tuple[str, ...]) -> list[SliderRow]:
+        found: dict[str, SliderRow] = {}
         for row in self.sliders:
             if row.title in titles:
-                row.set_value(values.get(row.title, row.default))
+                found.setdefault(row.title, row)
+        return list(found.values())
+
+    def named_values(self, titles: tuple[str, ...]) -> dict[str, int]:
+        return {row.title: row.value() for row in self.first_named(titles)}
+
+    def restore_named(self, titles: tuple[str, ...], values: dict[str, int]) -> None:
+        for row in self.first_named(titles):
+            row.set_value(values.get(row.title, row.default))
 
 
 def basic_panel(controls: DevelopControls) -> QWidget:
@@ -177,8 +183,8 @@ def presets_panel(controls: DevelopControls) -> QWidget:
 
 def history_list() -> QListWidget:
     widget = QListWidget()
-    widget.addItem("Develop")
-    widget.setFixedHeight(48)
+    widget.setMinimumHeight(72)
+    widget.setMaximumHeight(160)
     return widget
 
 

@@ -18,10 +18,11 @@ from src.ui.develop_sections import (
 from src.catalog.index_images import list_index_images
 from src.catalog.marks import read_photo_marks
 from src.catalog.removal import photo_id_of_index
-from src.develop.crop_settings import CropSettings
+from src.develop.crop_settings import CropSettings, decode_crop
+from src.develop.history import SAVED_LABEL, DevelopHistory, develop_settings, import_settings
 from src.develop.mark_text import marks_text
 from src.develop.crop_store import load_crop, save_crop
-from src.develop.tone_settings import TONE_KEYS
+from src.develop.tone_settings import TONE_KEYS, decode_tone
 from src.develop.tone_store import load_tone, save_tone
 from src.ui.dialogs.import_dialog import ImageProcessorRunnable
 from src.ui.panels.base_panel import BasePanel
@@ -55,6 +56,7 @@ class DevelopPanel(BasePanel):
         self._photos: list[Path] = []
         self._current: Path | None = None
         self._loading = False
+        self._histories: dict[int, DevelopHistory] = {}
         self._save_timer = _save_timer()
         self._source_image = QImage()
         self._session = 0
@@ -87,7 +89,9 @@ class DevelopPanel(BasePanel):
         column.add_section(CollapsibleSection("Navigator", self.navigator))
         column.add_section(CollapsibleSection("Presets", presets_panel(self._controls), fill=True), 1)
         column.add_section(CollapsibleSection("Snapshots", _note("No snapshots"), expanded=False))
-        column.add_section(CollapsibleSection("History", history_list()))
+        self.history_widget = history_list()
+        self.history_widget.currentRowChanged.connect(self._on_history_selected)
+        column.add_section(CollapsibleSection("History", self.history_widget))
         column.add_section(CollapsibleSection("Collections", collections_tree(), expanded=False))
         return column
 
@@ -153,6 +157,10 @@ class DevelopPanel(BasePanel):
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(QPushButton("Copy..."))
         row.addWidget(QPushButton("Paste"))
+        self.compare_button = QPushButton("Before/After")
+        self.compare_button.setCheckable(True)
+        self.compare_button.toggled.connect(self._paint_preview)
+        row.addWidget(self.compare_button)
         row.addStretch()
         proofing = QCheckBox("Soft Proofing")
         row.addWidget(proofing)
@@ -175,15 +183,13 @@ class DevelopPanel(BasePanel):
         return self.filmstrip
 
     def _bind_preview_sliders(self) -> None:
-        for row in self._controls.sliders:
-            if row.title in ("Exposure", "Contrast"):
-                row.changed.connect(self._paint_preview)
+        for row in self._controls.first_named(("Exposure", "Contrast")):
+            row.changed.connect(self._paint_preview)
 
     def _bind_tone_persistence(self) -> None:
         self._save_timer.timeout.connect(self._save_tone)
-        for row in self._controls.sliders:
-            if row.title in TONE_KEYS:
-                row.changed.connect(self._schedule_save)
+        for row in self._controls.first_named(TONE_KEYS):
+            row.changed.connect(self._schedule_save)
 
     def _on_crop_edited(self) -> None:
         self._paint_preview()
@@ -191,6 +197,7 @@ class DevelopPanel(BasePanel):
 
     def _schedule_save(self) -> None:
         if not self._loading:
+            self.compare_button.setChecked(False)
             self._save_timer.start(SAVE_DELAY_MS)
 
     def _save_tone(self) -> None:
@@ -198,11 +205,57 @@ class DevelopPanel(BasePanel):
         photo_id = self._current_photo_id()
         if photo_id is None or self._catalog is None:
             return
+        if self._persist(photo_id):
+            self._record_history(photo_id)
+
+    def _persist(self, photo_id: int) -> bool:
         try:
-            save_tone(self._catalog, photo_id, self._controls.named_values(TONE_KEYS))
-            save_crop(self._catalog, photo_id, self._crop.read())
+            self._write_settings(photo_id)
         except sqlite3.Error as error:
             logger.error("Could not save Develop Settings for photo %s: %s", photo_id, error)
+            return False
+        return True
+
+    def _write_settings(self, photo_id: int) -> None:
+        save_tone(self._catalog, photo_id, self._controls.named_values(TONE_KEYS))
+        save_crop(self._catalog, photo_id, self._crop.read())
+
+    def _current_settings(self) -> dict[str, str]:
+        return develop_settings(self._controls.named_values(TONE_KEYS), self._crop.read())
+
+    def _history_for(self, photo_id: int) -> DevelopHistory:
+        if photo_id not in self._histories:
+            history = DevelopHistory(import_settings())
+            history.record(self._current_settings(), SAVED_LABEL)
+            self._histories[photo_id] = history
+        return self._histories[photo_id]
+
+    def _record_history(self, photo_id: int) -> None:
+        if self._history_for(photo_id).record(self._current_settings()):
+            self._show_history(photo_id)
+
+    def _show_history(self, photo_id: int) -> None:
+        history = self._history_for(photo_id)
+        self.history_widget.blockSignals(True)
+        self.history_widget.clear()
+        self.history_widget.addItems([step.label for step in history.steps])
+        self.history_widget.setCurrentRow(history.current_index)
+        self.history_widget.blockSignals(False)
+
+    def _on_history_selected(self, row: int) -> None:
+        photo_id = self._current_photo_id()
+        if row < 0 or photo_id is None or self._catalog is None:
+            return
+        self._flush_tone()
+        self._apply_settings(self._history_for(photo_id).select(row))
+        self._persist(photo_id)
+        self._paint_preview()
+
+    def _apply_settings(self, settings: dict[str, str]) -> None:
+        self._loading = True
+        self._controls.restore_named(TONE_KEYS, decode_tone(settings))
+        self._crop.write(decode_crop(settings))
+        self._loading = False
 
     def _current_photo_id(self) -> int | None:
         if self._current is None:
@@ -294,6 +347,12 @@ class DevelopPanel(BasePanel):
         image = QImage(str(path))
         self._set_source(image)
         self._baseline = self._controls.values()
+        self._show_current_history()
+
+    def _show_current_history(self) -> None:
+        photo_id = self._current_photo_id()
+        if photo_id is not None:
+            self._show_history(photo_id)
 
     def _set_source(self, image: QImage) -> None:
         self._source_image = image
@@ -301,11 +360,14 @@ class DevelopPanel(BasePanel):
         self._paint_preview()
 
     def _paint_preview(self) -> None:
-        cropped = crop_preview(self._source_image, self._crop.read())
-        image = tone_image(cropped, self._slider_value("Exposure"), self._slider_value("Contrast"))
+        image = self._source_image if self.compare_button.isChecked() else self._edited_image()
         self.histogram.set_image(image)
         _show_pixmap(self.navigator, image, self.navigator.size())
         _show_pixmap(self.preview, image, self.preview.size())
+
+    def _edited_image(self) -> QImage:
+        cropped = crop_preview(self._source_image, self._crop.read())
+        return tone_image(cropped, self._slider_value("Exposure"), self._slider_value("Contrast"))
 
     def _slider_value(self, title: str) -> int:
         for row in self._controls.sliders:
