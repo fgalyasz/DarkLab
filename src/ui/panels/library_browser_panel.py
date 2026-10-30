@@ -1,5 +1,4 @@
 import logging
-import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -7,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import QEvent, QObject, Qt, QThreadPool, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+    QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QListWidget, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget,
     QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -18,6 +17,9 @@ from src.catalog.index_images import index_image_path, list_index_images
 from src.catalog.marks import read_marks, write_mark
 from src.catalog.missing import missing_index_paths
 from src.catalog.removal import photo_id_of_index, remove_indexes
+from src.exporting.batch import export_photos
+from src.exporting.messages import report_summary
+from src.ui.dialogs.export_dialog import ExportDialog
 from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
@@ -678,23 +680,16 @@ class LibraryBrowserPanel(BasePanel):
         self.import_requested.emit()
 
     def _export_selected(self) -> None:
-        if not self._selected:
-            self.status_label.setText("Select photos to export.")
+        if self._catalog is None:
+            self.status_label.setText("Open a catalog to export.")
             return
-        folder = QFileDialog.getExistingDirectory(self, "Export")
-        if folder:
-            self._copy_export(Path(folder))
+        dialog = ExportDialog(self, self._catalog, _photo_ids(self._selected))
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._run_export(dialog)
 
-    def _copy_export(self, folder: Path) -> None:
-        copied = sum(self._copy_one(path, folder) for path in self._selected)
-        self.status_label.setText(f"Exported {copied} photos.")
-
-    def _copy_one(self, path: Path, folder: Path) -> int:
-        try:
-            shutil.copy2(path, folder / path.name)
-        except OSError:
-            return 0
-        return 1
+    def _run_export(self, dialog: ExportDialog) -> None:
+        report = export_photos(self._catalog, _photo_ids(self._selected), dialog.destination(), dialog.preset())
+        self.status_label.setText(report_summary(report))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

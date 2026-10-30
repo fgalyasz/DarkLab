@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Library Export renders the selected photographs as JPEG or TIFF from their originals, with the saved crop and Exposure and Contrast, at the chosen long edge in sRGB. The built-in Preset is JPEG, sRGB, long edge 2048, no watermark; your own Presets keep format, size, color space, output sharpening, and watermark text. Photos whose original is missing are skipped and named, the dialog says in plain words why Export is unavailable, and Export never changes an original or adds files to the catalog. The old Export button that copied the small index images is gone.
 - Develop has a Crop section: Left, Top, Right, Bottom, Angle (straighten), and a Lock aspect ratio switch. The Preview shows the cropped view, the values are stored per photograph in the catalog and come back when it is reopened, Reset returns the empty crop, and the original file is never touched.
 - Library filters by Flag (Picked, Rejected, Unflagged) and Color Label as well as filename and Rating. The filters combine, the grid count matches what they select, and Clear brings back the whole catalog. Filtering never changes a mark or an original. Body label contrast on the dark theme is now checked against 4.5:1.
 - Rating, Flag, and Color Label set in the Library are stored in the catalog and come back when it is reopened. Develop shows the same marks for the photograph it displays. Older catalogs gain the new columns when opened, and the original file is never touched.

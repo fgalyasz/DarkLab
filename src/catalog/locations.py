@@ -5,6 +5,7 @@ from pathlib import Path
 DATABASE_NAME = "catalog.sqlite"
 PREVIEWS_NAME = "previews"
 SETTINGS_NAME = "settings.json"
+PRESETS_NAME = "export_presets.json"
 
 
 def database_file(catalog: Path) -> Path:
@@ -40,3 +41,7 @@ def _ensure_settings(path: Path) -> None:
     if path.is_file():
         return
     path.write_text("{}\n", encoding="utf-8")
+
+
+def presets_file(catalog: Path) -> Path:
+    return package_root(catalog) / PRESETS_NAME
