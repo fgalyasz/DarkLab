@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem, QVBoxLayout, QWidget, QCheckBox, QListWidget,
 )
 
+from src.develop.crop_settings import MAX_ANGLE, MAX_EDGE
 from src.ui.widgets.color_wheel import ColorWheel
 from src.ui.widgets.slider_row import SliderRow
 from src.ui.widgets.tone_curve_widget import ToneCurveWidget
@@ -30,6 +31,7 @@ PRESENCE_SPECS = (
 class DevelopControls:
     def __init__(self) -> None:
         self.sliders: list[SliderRow] = []
+        self.crop_lock = QCheckBox("Lock aspect ratio")
 
     def slider(self, title: str, minimum: int, maximum: int, value: int = 0) -> SliderRow:
         row = SliderRow(title, minimum, maximum, value)
@@ -39,6 +41,7 @@ class DevelopControls:
     def reset(self) -> None:
         for row in self.sliders:
             row.reset()
+        self.crop_lock.setChecked(False)
 
     def values(self) -> list[int]:
         return [row.value() for row in self.sliders]
@@ -121,6 +124,18 @@ def transform_panel(controls: DevelopControls) -> QWidget:
     panel = _panel()
     layout = _layout(panel)
     layout.addWidget(_upright_group(controls))
+    return panel
+
+
+def crop_panel(controls: DevelopControls) -> QWidget:
+    panel = _panel()
+    layout = _layout(panel)
+    group, inner = _group("Crop")
+    for title in ("Left", "Top", "Right", "Bottom"):
+        inner.addWidget(controls.slider(title, 0, MAX_EDGE, 0))
+    inner.addWidget(controls.slider("Angle", -MAX_ANGLE, MAX_ANGLE, 0))
+    inner.addWidget(controls.crop_lock)
+    layout.addWidget(group)
     return panel
 
 

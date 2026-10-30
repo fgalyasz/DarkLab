@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Develop has a Crop section: Left, Top, Right, Bottom, Angle (straighten), and a Lock aspect ratio switch. The Preview shows the cropped view, the values are stored per photograph in the catalog and come back when it is reopened, Reset returns the empty crop, and the original file is never touched.
 - Library filters by Flag (Picked, Rejected, Unflagged) and Color Label as well as filename and Rating. The filters combine, the grid count matches what they select, and Clear brings back the whole catalog. Filtering never changes a mark or an original. Body label contrast on the dark theme is now checked against 4.5:1.
 - Rating, Flag, and Color Label set in the Library are stored in the catalog and come back when it is reopened. Develop shows the same marks for the photograph it displays. Older catalogs gain the new columns when opened, and the original file is never touched.
 - Develop remembers the six Tone sliders (Exposure, Contrast, Highlights, Shadows, Whites, Blacks) for each photograph in the catalog. Reopening the catalog shows the same values, other stored settings are kept, and the original file is never touched.

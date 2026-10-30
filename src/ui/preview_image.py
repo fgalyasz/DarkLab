@@ -1,4 +1,7 @@
-from PyQt6.QtGui import QColor, QImage
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QImage, QTransform
+
+from src.develop.crop_settings import CropSettings, crop_box
 
 from src.imaging.preview_tone import tone_channel
 
@@ -27,3 +30,17 @@ def _toned_color(color: QColor, exposure: float, contrast: float) -> QColor:
         tone_channel(color.green(), exposure, contrast),
         tone_channel(color.blue(), exposure, contrast),
     )
+
+
+def crop_preview(image: QImage, crop: CropSettings) -> QImage:
+    if image.isNull() or crop.is_empty:
+        return image
+    rotated = _straightened(image, crop.angle)
+    left, top, right, bottom = crop_box((rotated.width(), rotated.height()), crop)
+    return rotated.copy(left, top, right - left, bottom - top)
+
+
+def _straightened(image: QImage, angle: int) -> QImage:
+    if angle == 0:
+        return image
+    return image.transformed(QTransform().rotate(-angle), Qt.TransformationMode.SmoothTransformation)
