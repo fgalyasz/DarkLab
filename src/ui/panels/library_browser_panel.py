@@ -6,16 +6,17 @@ from pathlib import Path
 from PyQt6.QtCore import QEvent, QObject, Qt, QThreadPool, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-    QListWidget, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget,
-    QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+    QListWidget, QMessageBox, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget,
+    QTextEdit, QVBoxLayout, QWidget,
 )
 
 from src.config.config_manager import ConfigManager
+from src.catalog.catalog_folders import catalog_folders, folder_photo_ids, relink_folder
 from src.catalog.cull_filter import filter_by_marks
 from src.catalog.index_images import index_image_path, list_index_images
 from src.catalog.marks import read_marks, write_mark
-from src.catalog.missing import missing_index_paths
+from src.catalog.missing import RelinkError, missing_index_paths
 from src.catalog.removal import photo_id_of_index, remove_indexes
 from src.exporting.batch import export_photos
 from src.exporting.messages import report_summary
@@ -24,11 +25,12 @@ from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
 from src.ui.library_catalog import (
-    filter_paths, keyword_tokens, pictures_directory, sort_paths,
+    filter_paths, keyword_tokens, sort_paths,
 )
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.preview_image import tone_image
+from src.ui.widgets.catalog_folder_panel import CatalogFolderPanel
 from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
 from src.ui.widgets.grid_image_widget import GridImageWidget
@@ -65,33 +67,6 @@ class ThumbRelay(QObject):
         self._panel._on_thumb(path, image, self._session)
 
 
-class SourceFolderTree(QTreeWidget):
-    folder_chosen = pyqtSignal(str)
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.setHeaderHidden(True)
-        self.itemClicked.connect(self._choose)
-        self.itemExpanded.connect(self._expand)
-
-    def add_root(self, path: Path) -> None:
-        item = make_folder_item(path)
-        if item is not None:
-            self.addTopLevelItem(item)
-
-    def _choose(self, item: QTreeWidgetItem) -> None:
-        folder = item.data(0, Qt.ItemDataRole.UserRole)
-        if folder:
-            self.folder_chosen.emit(str(folder))
-
-    def _expand(self, item: QTreeWidgetItem) -> None:
-        if not _remove_placeholder(item):
-            return
-        folder = item.data(0, Qt.ItemDataRole.UserRole)
-        if folder:
-            _append_children(item, Path(str(folder)))
-
-
 class LibraryBrowserPanel(BasePanel):
     import_requested = pyqtSignal()
     catalog_changed = pyqtSignal()
@@ -100,6 +75,7 @@ class LibraryBrowserPanel(BasePanel):
         self._config = ConfigManager()
         self._catalog: Path | None = None
         self._images: list[Path] = []
+        self._folder: Path | None = None
         self._selected: list[Path] = []
         self._thumbs: dict[Path, QPixmap] = {}
         self._keywords: dict[str, str] = {}
@@ -140,8 +116,9 @@ class LibraryBrowserPanel(BasePanel):
         column = PanelColumn()
         self.navigator = self._navigator_label()
         self.catalog = self._catalog_list()
-        self.folders = SourceFolderTree()
+        self.folders = CatalogFolderPanel()
         self.folders.folder_chosen.connect(self._load_folder)
+        self.folders.relink_requested.connect(self._relink_folder)
         self.collections = self._static_list(["Quick Collection"])
         self.publish = self._static_list(["Hard Drive", "Flickr"])
         column.add_section(CollapsibleSection("Navigator", self.navigator))
@@ -372,21 +349,17 @@ class LibraryBrowserPanel(BasePanel):
         slider.valueChanged.connect(self._apply_grid)
         return slider
 
-    def _populate_folders(self) -> None:
-        self.folders.add_root(pictures_directory())
-        if Path.home() != pictures_directory():
-            self.folders.add_root(Path.home())
-        if Path("/Volumes").is_dir():
-            self.folders.add_root(Path("/Volumes"))
-
     def _on_catalog(self, row: int) -> None:
         if row == 0:
+            self._folder = None
+            self.folders.clear_selection()
             self._load_all_photographs()
         if row == 1:
             self._load_previous_import()
 
     def show_catalog(self, catalog: Path | None) -> None:
         self._catalog = catalog
+        self._folder = None
         self._load_all_photographs()
 
     def _catalog_markers(self) -> dict[Path, dict[str, str]]:
@@ -410,12 +383,23 @@ class LibraryBrowserPanel(BasePanel):
 
     def _load_all_photographs(self) -> None:
         self._cancel_load()
+        self._refresh_folders()
         self._show_paths(self._catalog_indexes())
+
+    def _refresh_folders(self) -> None:
+        folders = [] if self._catalog is None else catalog_folders(self._catalog)
+        if self._folder not in {folder.path for folder in folders}:
+            self._folder = None
+        self.folders.set_folders(folders, self._folder)
 
     def _catalog_indexes(self) -> list[Path]:
         if self._catalog is None:
             return []
-        return list_index_images(self._catalog)
+        indexes = list_index_images(self._catalog)
+        if self._folder is None:
+            return indexes
+        wanted = set(folder_photo_ids(self._catalog, self._folder))
+        return [path for path in indexes if photo_id_of_index(path) in wanted]
 
     def _missing_indexes(self) -> set[Path]:
         if self._catalog is None:
@@ -425,8 +409,27 @@ class LibraryBrowserPanel(BasePanel):
     def _load_previous_import(self) -> None:
         self._load_all_photographs()
 
-    def _load_folder(self, _folder: str) -> None:
+    def _load_folder(self, folder: Path) -> None:
+        self._folder = folder
         self._load_all_photographs()
+
+    def _relink_folder(self, folder: Path) -> None:
+        replacement = QFileDialog.getExistingDirectory(self, f"Relink {folder.name}")
+        if replacement:
+            self.relink_folder_to(folder, Path(replacement))
+
+    def relink_folder_to(self, folder: Path, replacement: Path) -> bool:
+        if self._catalog is None:
+            return False
+        try:
+            relink_folder(self._catalog, folder, replacement)
+        except (RelinkError, OSError, sqlite3.Error) as error:
+            logger.error("Could not relink folder %s to %s: %s", folder, replacement, error)
+            QMessageBox.warning(self, "Relink Folder", str(error))
+            return False
+        self._folder = replacement
+        self._load_all_photographs()
+        return True
 
     def _show_paths(self, paths: list[Path]) -> None:
         self._images = list(paths)
@@ -613,7 +616,6 @@ class LibraryBrowserPanel(BasePanel):
 
     def _finish_library(self) -> None:
         self._bind_removal_keys()
-        self._populate_folders()
         self._load_all_photographs()
         self.grid_scroll.viewport().installEventFilter(self)
 
@@ -698,67 +700,9 @@ class LibraryBrowserPanel(BasePanel):
             self._paint_previews()
 
 
-def make_folder_item(path: Path) -> QTreeWidgetItem | None:
-    try:
-        return _folder_item(path)
-    except OSError:
-        return None
-
-
-def _folder_item(path: Path) -> QTreeWidgetItem | None:
-    if not path.is_dir():
-        return None
-    item = QTreeWidgetItem([path.name or str(path)])
-    item.setData(0, Qt.ItemDataRole.UserRole, str(path))
-    _add_placeholder(item, path)
-    return item
-
-
-def _add_placeholder(item: QTreeWidgetItem, path: Path) -> None:
-    try:
-        if _has_subfolders(path):
-            QTreeWidgetItem(item, ["Loading..."])
-    except OSError:
-        return
-
-
-def _has_subfolders(path: Path) -> bool:
-    return any(child.is_dir() and not child.name.startswith(".") for child in path.iterdir())
-
-
 def _photo_ids(paths: list[Path]) -> list[int]:
     found = [photo_id_of_index(path) for path in paths]
     return [photo_id for photo_id in found if photo_id is not None]
-
-
-def _remove_placeholder(item: QTreeWidgetItem) -> bool:
-    if item.childCount() == 0:
-        return False
-    child = item.child(0)
-    if child and child.text(0) == "Loading...":
-        item.removeChild(child)
-        return True
-    return False
-
-
-def _append_children(item: QTreeWidgetItem, path: Path) -> None:
-    try:
-        folders = _subfolders(path)
-    except OSError:
-        return
-    for folder in folders:
-        child = make_folder_item(folder)
-        if child is not None:
-            item.addChild(child)
-
-
-def _folder_name(path: Path) -> str:
-    return path.name.lower()
-
-
-def _subfolders(path: Path) -> list[Path]:
-    folders = [entry for entry in path.iterdir() if entry.is_dir() and not entry.name.startswith(".")]
-    return sorted(folders, key=_folder_name)
 
 
 def thumb_cell(slider_value: int, viewport_width: int) -> tuple[int, int]:
