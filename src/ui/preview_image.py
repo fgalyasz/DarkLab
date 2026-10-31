@@ -3,6 +3,7 @@ from PyQt6.QtGui import QColor, QImage, QTransform
 
 from src.develop.crop_settings import CropSettings, crop_box
 
+from src.imaging.clipping import clipping_color
 from src.imaging.preview_tone import tone_channel
 
 
@@ -44,3 +45,20 @@ def _straightened(image: QImage, angle: int) -> QImage:
     if angle == 0:
         return image
     return image.transformed(QTransform().rotate(-angle), Qt.TransformationMode.SmoothTransformation)
+
+
+def clipping_overlay(image: QImage) -> QImage:
+    if image.isNull():
+        return image
+    result = image.convertToFormat(QImage.Format.Format_RGB32)
+    for y in range(result.height()):
+        _paint_clipped_row(result, y)
+    return result
+
+
+def _paint_clipped_row(image: QImage, y: int) -> None:
+    for x in range(image.width()):
+        color = image.pixelColor(x, y)
+        clipped = clipping_color(color.red(), color.green(), color.blue())
+        if clipped is not None:
+            image.setPixelColor(x, y, QColor(*clipped))

@@ -28,7 +28,7 @@ from src.ui.dialogs.import_dialog import ImageProcessorRunnable
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.crop_binding import CropBinding
-from src.ui.preview_image import crop_preview, tone_image
+from src.ui.preview_image import clipping_overlay, crop_preview, tone_image
 from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
 from src.ui.widgets.histogram_widget import HistogramWidget
@@ -161,6 +161,10 @@ class DevelopPanel(BasePanel):
         self.compare_button.setCheckable(True)
         self.compare_button.toggled.connect(self._paint_preview)
         row.addWidget(self.compare_button)
+        self.clipping_button = QPushButton("Clipping")
+        self.clipping_button.setCheckable(True)
+        self.clipping_button.toggled.connect(self._paint_preview)
+        row.addWidget(self.clipping_button)
         row.addStretch()
         proofing = QCheckBox("Soft Proofing")
         row.addWidget(proofing)
@@ -363,7 +367,10 @@ class DevelopPanel(BasePanel):
         image = self._source_image if self.compare_button.isChecked() else self._edited_image()
         self.histogram.set_image(image)
         _show_pixmap(self.navigator, image, self.navigator.size())
-        _show_pixmap(self.preview, image, self.preview.size())
+        _show_pixmap(self.preview, self._with_clipping(image), self.preview.size())
+
+    def _with_clipping(self, image: QImage) -> QImage:
+        return clipping_overlay(image) if self.clipping_button.isChecked() else image
 
     def _edited_image(self) -> QImage:
         cropped = crop_preview(self._source_image, self._crop.read())
