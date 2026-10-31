@@ -111,6 +111,10 @@ class LightroomShellTests(unittest.TestCase):
         with isolated_config():
             window = MainWindow()
             self.assertEqual(set(window.panels), {"library", "develop", "map", "book", "slideshow", "print", "website"})
+            self.assertEqual(
+                list(window.module_bar._buttons),
+                ["library", "develop", "map", "book", "slideshow", "print", "website"],
+            )
             self.assertEqual(window.panel_container.currentWidget(), window.panels["library"])
             library = window.panels["library"]
             self.assertTrue(hasattr(library, "navigator"))

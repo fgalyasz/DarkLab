@@ -17,6 +17,7 @@ from src.catalog.cull_filter import filter_by_marks
 from src.catalog.index_images import index_image_path, list_index_images
 from src.catalog.marks import read_marks, write_mark
 from src.catalog.missing import RelinkError, missing_index_paths
+from src.catalog.photo_order import CAPTURE, IMPORTED, NAME, RATING, SortKeys, read_sort_keys, sort_indexes
 from src.catalog.removal import photo_id_of_index, remove_indexes
 from src.exporting.batch import export_photos
 from src.exporting.messages import report_summary
@@ -24,9 +25,7 @@ from src.ui.dialogs.export_dialog import ExportDialog
 from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
-from src.ui.library_catalog import (
-    filter_paths, keyword_tokens, sort_paths,
-)
+from src.ui.library_catalog import filter_paths, keyword_tokens
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.preview_image import tone_image
@@ -76,6 +75,7 @@ class LibraryBrowserPanel(BasePanel):
         self._catalog: Path | None = None
         self._images: list[Path] = []
         self._folder: Path | None = None
+        self._sort_keys = SortKeys()
         self._selected: list[Path] = []
         self._thumbs: dict[Path, QPixmap] = {}
         self._keywords: dict[str, str] = {}
@@ -336,8 +336,10 @@ class LibraryBrowserPanel(BasePanel):
 
     def _sort_combo(self) -> QComboBox:
         combo = QComboBox()
-        combo.addItem("Capture Time", "time")
-        combo.addItem("File Name", "name")
+        combo.addItem("Capture Time", CAPTURE)
+        combo.addItem("File Name", NAME)
+        combo.addItem("Import Time", IMPORTED)
+        combo.addItem("Rating", RATING)
         combo.currentIndexChanged.connect(self._refresh_grid)
         return combo
 
@@ -433,6 +435,7 @@ class LibraryBrowserPanel(BasePanel):
 
     def _show_paths(self, paths: list[Path]) -> None:
         self._images = list(paths)
+        self._sort_keys = SortKeys() if self._catalog is None else read_sort_keys(self._catalog)
         self._load_markers()
         self._selected = []
         self._clear_selection_panels()
@@ -459,7 +462,7 @@ class LibraryBrowserPanel(BasePanel):
             str(self.pick_combo.currentData()),
             str(self.color_combo.currentData()),
         )
-        return sort_paths(marked, str(self.sort_combo.currentData()))
+        return sort_indexes(marked, str(self.sort_combo.currentData()), self._sort_keys, self.grid.image_markers)
 
     def _restore_thumbs(self, paths: list[Path]) -> None:
         for path in paths:
