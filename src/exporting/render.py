@@ -9,7 +9,8 @@ from src.develop.tone_settings import decode_tone
 from src.exporting.preset import ExportPreset
 from src.imaging.crop import crop_image
 from src.imaging.original_image import load_original, srgb_profile_bytes
-from src.imaging.tone import tone_pil
+from src.imaging.color_grade import ColorGrade
+from src.imaging.tone import grade_pil, tone_pil
 
 JPEG_QUALITY = 92
 WATERMARK_MARGIN = 12
@@ -19,6 +20,7 @@ def render_photo(original: Path, settings: dict[str, str], preset: ExportPreset)
     cropped = crop_image(load_original(original), decode_crop(settings))
     tone = decode_tone(settings)
     toned = tone_pil(cropped, tone.get("Exposure", 0), tone.get("Contrast", 0))
+    toned = grade_pil(toned, ColorGrade.from_tone(tone))
     resized = resize_long_edge(toned, preset.long_edge)
     return _watermarked(_sharpened(resized, preset.sharpen), preset.watermark)
 

@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from src.develop.crop_settings import LOCK_KEY, CropSettings, encode_crop
-from src.develop.tone_settings import TONE_KEYS, encode_tone
+from src.develop.tone_settings import TONE_DEFAULTS, encode_tone
 
 IMPORT_LABEL = "Import"
 SAVED_LABEL = "Saved settings"
@@ -21,7 +21,7 @@ def develop_settings(tone: dict[str, int], crop: CropSettings) -> dict[str, str]
 
 
 def import_settings() -> dict[str, str]:
-    return develop_settings({key: 0 for key in TONE_KEYS}, CropSettings())
+    return develop_settings(dict(TONE_DEFAULTS), CropSettings())
 
 
 def step_label(before: dict[str, str], after: dict[str, str]) -> str:

@@ -1,9 +1,11 @@
+import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QImage, QTransform
 
 from src.develop.crop_settings import CropSettings, crop_box
 
 from src.imaging.clipping import clipping_color
+from src.imaging.color_grade import ColorGrade, apply_grade
 from src.imaging.preview_tone import tone_channel
 
 
@@ -62,3 +64,31 @@ def _paint_clipped_row(image: QImage, y: int) -> None:
         clipped = clipping_color(color.red(), color.green(), color.blue())
         if clipped is not None:
             image.setPixelColor(x, y, QColor(*clipped))
+
+
+def grade_image(image: QImage, grade: ColorGrade) -> QImage:
+    if image.isNull() or grade.is_neutral:
+        return image
+    graded = apply_grade(_pixel_array(image), grade)
+    return _image_from_array(graded)
+
+
+def average_rgb(image: QImage) -> tuple[float, float, float]:
+    if image.isNull():
+        return (1.0, 1.0, 1.0)
+    red, green, blue = _pixel_array(image).reshape(-1, 3).mean(axis=0)
+    return (float(red), float(green), float(blue))
+
+
+def _pixel_array(image: QImage) -> np.ndarray:
+    plain = image.convertToFormat(QImage.Format.Format_RGB888)
+    buffer = plain.constBits()
+    buffer.setsize(plain.sizeInBytes())
+    rows = np.frombuffer(buffer, dtype=np.uint8).reshape(plain.height(), plain.bytesPerLine())
+    return rows[:, : plain.width() * 3].reshape(plain.height(), plain.width(), 3).copy()
+
+
+def _image_from_array(pixels: np.ndarray) -> QImage:
+    height, width = pixels.shape[:2]
+    data = np.ascontiguousarray(pixels)
+    return QImage(data.data, width, height, width * 3, QImage.Format.Format_RGB888).copy()

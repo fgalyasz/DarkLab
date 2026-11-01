@@ -28,7 +28,9 @@ from src.ui.dialogs.import_dialog import ImageProcessorRunnable
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.crop_binding import CropBinding
-from src.ui.preview_image import clipping_overlay, crop_preview, tone_image
+from src.ui.white_balance_binding import WhiteBalanceBinding
+from src.imaging.color_grade import ColorGrade
+from src.ui.preview_image import clipping_overlay, crop_preview, grade_image, tone_image
 from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
 from src.ui.widgets.histogram_widget import HistogramWidget
@@ -36,6 +38,7 @@ from src.ui.widgets.histogram_widget import HistogramWidget
 
 logger = logging.getLogger(__name__)
 SAVE_DELAY_MS = 400
+PREVIEW_KEYS = ("Exposure", "Contrast", "Temp", "Tint", "Vibrance", "Saturation")
 
 
 class ThumbRelay(QObject):
@@ -150,6 +153,7 @@ class DevelopPanel(BasePanel):
         self._bind_preview_sliders()
         self._bind_tone_persistence()
         self._crop = CropBinding(self._controls, self._on_crop_edited)
+        self._balance = WhiteBalanceBinding(self._controls, lambda: self._source_image)
 
     def _center_toolbar(self) -> QWidget:
         bar = QWidget()
@@ -187,7 +191,7 @@ class DevelopPanel(BasePanel):
         return self.filmstrip
 
     def _bind_preview_sliders(self) -> None:
-        for row in self._controls.first_named(("Exposure", "Contrast")):
+        for row in self._controls.first_named(PREVIEW_KEYS):
             row.changed.connect(self._paint_preview)
 
     def _bind_tone_persistence(self) -> None:
@@ -259,6 +263,7 @@ class DevelopPanel(BasePanel):
         self._loading = True
         self._controls.restore_named(TONE_KEYS, decode_tone(settings))
         self._crop.write(decode_crop(settings))
+        self._balance.show_choice()
         self._loading = False
 
     def _current_photo_id(self) -> int | None:
@@ -273,6 +278,7 @@ class DevelopPanel(BasePanel):
         self._loading = True
         self._controls.restore_named(TONE_KEYS, stored)
         self._crop.write(load_crop(self._catalog, photo_id) if known else CropSettings())
+        self._balance.show_choice()
         self._loading = False
 
     def show_catalog(self, catalog: Path | None) -> None:
@@ -374,7 +380,8 @@ class DevelopPanel(BasePanel):
 
     def _edited_image(self) -> QImage:
         cropped = crop_preview(self._source_image, self._crop.read())
-        return tone_image(cropped, self._slider_value("Exposure"), self._slider_value("Contrast"))
+        toned = tone_image(cropped, self._slider_value("Exposure"), self._slider_value("Contrast"))
+        return grade_image(toned, ColorGrade.from_tone(self._controls.named_values(TONE_KEYS)))
 
     def _slider_value(self, title: str) -> int:
         for row in self._controls.sliders:
@@ -384,10 +391,12 @@ class DevelopPanel(BasePanel):
 
     def _reset_controls(self) -> None:
         self._controls.reset()
+        self._balance.show_choice()
         self._paint_preview()
 
     def _restore_previous(self) -> None:
         self._controls.restore(self._baseline)
+        self._balance.show_choice()
         self._paint_preview()
 
     def _cancel_load(self) -> None:

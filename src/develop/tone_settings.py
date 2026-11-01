@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-TONE_KEYS = ("Exposure", "Contrast", "Highlights", "Shadows", "Whites", "Blacks")
+NEUTRAL_TEMPERATURE = 5500
+BASIC_KEYS = ("Exposure", "Contrast", "Highlights", "Shadows", "Whites", "Blacks")
+PRESENCE_KEYS = ("Texture", "Clarity", "Dehaze", "Vibrance", "Saturation")
+BALANCE_KEYS = ("Temp", "Tint")
+TONE_KEYS = BALANCE_KEYS + BASIC_KEYS + PRESENCE_KEYS
+TONE_DEFAULTS = {key: 0 for key in TONE_KEYS} | {"Temp": NEUTRAL_TEMPERATURE}
 
 
 def encode_tone(values: dict[str, int]) -> dict[str, str]:

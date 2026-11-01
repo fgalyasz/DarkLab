@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.develop.crop_settings import MAX_ANGLE, MAX_EDGE
+from src.develop.white_balance import CHOICES
 from src.ui.widgets.color_wheel import ColorWheel
 from src.ui.widgets.slider_row import SliderRow
 from src.ui.widgets.tone_curve_widget import ToneCurveWidget
@@ -32,6 +33,7 @@ class DevelopControls:
     def __init__(self) -> None:
         self.sliders: list[SliderRow] = []
         self.crop_lock = QCheckBox("Lock aspect ratio")
+        self.white_balance = _white_balance_combo()
 
     def slider(self, title: str, minimum: int, maximum: int, value: int = 0) -> SliderRow:
         row = SliderRow(title, minimum, maximum, value)
@@ -249,7 +251,7 @@ def _treatment_group() -> QWidget:
 
 def _balance_group(controls: DevelopControls) -> QWidget:
     group, layout = _group("WB")
-    layout.addWidget(_white_balance_combo())
+    layout.addWidget(controls.white_balance)
     layout.addWidget(controls.slider("Temp", 2000, 50000, 5500))
     layout.addWidget(controls.slider("Tint", -150, 150, 0))
     return group
@@ -278,8 +280,7 @@ def _toggle(group: QButtonGroup, title: str, checked: bool) -> QPushButton:
 
 def _white_balance_combo() -> QComboBox:
     combo = QComboBox()
-    for name in ("As Shot", "Auto", "Daylight", "Cloudy", "Shade", "Tungsten", "Fluorescent", "Flash", "Custom"):
-        combo.addItem(name)
+    combo.addItems(list(CHOICES))
     return combo
 
 

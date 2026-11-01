@@ -14,12 +14,15 @@ from src.catalog.database import create_catalog
 from src.catalog.develop_settings import merge_develop_settings, read_develop_settings, write_develop_settings
 from src.catalog.file_hash import content_hash
 from src.catalog.index_images import list_index_images
-from src.develop.tone_settings import TONE_KEYS, decode_tone, encode_tone
+from src.develop.tone_settings import TONE_DEFAULTS, TONE_KEYS, decode_tone, encode_tone
 from src.develop.tone_store import load_tone, save_tone
 from src.importing.originals import import_originals
 
 APP = QApplication.instance() or QApplication([])
 TONE = {"Exposure": 120, "Contrast": -15, "Highlights": 5, "Shadows": 40, "Whites": -3, "Blacks": 9}
+FULL_TONE = {
+    **TONE, "Temp": 6800, "Tint": -12, "Texture": 4, "Clarity": -8, "Dehaze": 15, "Vibrance": 22, "Saturation": -30,
+}
 SAVE_ERROR = "src.ui.panels.develop_panel.save_tone"
 
 
@@ -46,17 +49,21 @@ def _slider(panel, title: str):
 
 class ToneSettingsTests(unittest.TestCase):
     def test_encode_keeps_only_tone_keys(self) -> None:
-        encoded = encode_tone({"Exposure": 5, "Texture": 7})
-        self.assertEqual(encoded, {"Exposure": "5"})
+        encoded = encode_tone({"Exposure": 5, "Texture": 7, "Rating": 3})
+        self.assertEqual(encoded, {"Exposure": "5", "Texture": "7"})
 
     def test_decode_round_trips_every_tone_key(self) -> None:
-        self.assertEqual(decode_tone(encode_tone(TONE)), TONE)
+        self.assertEqual(decode_tone(encode_tone(FULL_TONE)), FULL_TONE)
 
     def test_decode_ignores_missing_and_invalid_values(self) -> None:
         self.assertEqual(decode_tone({"Exposure": "0.5", "Contrast": "x", "Shadows": "-4"}), {"Shadows": -4})
 
-    def test_tone_keys_are_the_six_tone_sliders(self) -> None:
-        self.assertEqual(len(TONE_KEYS), 6)
+    def test_tone_keys_cover_balance_tone_and_presence(self) -> None:
+        self.assertEqual(len(TONE_KEYS), 13)
+
+    def test_temperature_defaults_to_neutral_and_the_rest_to_zero(self) -> None:
+        self.assertEqual(TONE_DEFAULTS["Temp"], 5500)
+        self.assertEqual(sum(value for key, value in TONE_DEFAULTS.items() if key != "Temp"), 0)
 
 
 class ToneStoreTests(unittest.TestCase):
@@ -66,6 +73,10 @@ class ToneStoreTests(unittest.TestCase):
     def test_saved_tone_loads_again(self) -> None:
         save_tone(self.catalog, 1, TONE)
         self.assertEqual(load_tone(self.catalog, 1), TONE)
+
+    def test_balance_and_presence_round_trip(self) -> None:
+        save_tone(self.catalog, 1, FULL_TONE)
+        self.assertEqual(load_tone(self.catalog, 1), FULL_TONE)
 
     def test_photo_without_tone_loads_empty(self) -> None:
         self.assertEqual(load_tone(self.catalog, 1), {})
@@ -125,11 +136,35 @@ class DevelopPanelToneTests(unittest.TestCase):
         _slider(panel, "Whites").set_value(10)
         self.assertTrue(panel._save_timer.isActive())
 
+    def test_presence_and_balance_sliders_schedule_a_save(self) -> None:
+        for title in ("Texture", "Clarity", "Dehaze", "Vibrance", "Saturation", "Temp", "Tint"):
+            panel = _panel(self.catalog)
+            panel._show_photo(self.index)
+            _slider(panel, title).set_value(_slider(panel, title).value() + 10)
+            self.assertTrue(panel._save_timer.isActive(), title)
+
     def test_other_sliders_do_not_schedule_a_save(self) -> None:
         panel = _panel(self.catalog)
         panel._show_photo(self.index)
-        _slider(panel, "Texture").set_value(10)
+        _slider(panel, "Distortion").set_value(10)
         self.assertFalse(panel._save_timer.isActive())
+
+    def test_balance_and_presence_survive_reopening_the_catalog(self) -> None:
+        panel = _panel(self.catalog)
+        panel._show_photo(self.index)
+        for title in ("Temp", "Tint", "Texture", "Clarity", "Dehaze", "Vibrance", "Saturation"):
+            _slider(panel, title).set_value(FULL_TONE[title])
+        panel._save_tone()
+        reopened = _panel(self.catalog)
+        reopened._show_photo(self.index)
+        for title in ("Temp", "Tint", "Texture", "Clarity", "Dehaze", "Vibrance", "Saturation"):
+            self.assertEqual(_slider(reopened, title).value(), FULL_TONE[title], title)
+
+    def test_new_photo_shows_neutral_temperature(self) -> None:
+        panel = _panel(self.catalog)
+        panel._show_photo(self.index)
+        self.assertEqual(_slider(panel, "Temp").value(), 5500)
+        self.assertEqual(panel._controls.white_balance.currentText(), "As Shot")
 
     def test_pending_save_flushes_before_the_next_photo(self) -> None:
         panel = _panel(self.catalog)
