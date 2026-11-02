@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from src.catalog.integrity import require_healthy
 from src.catalog.locations import database_file, prepare_package
 
 META_TABLE = "CREATE TABLE IF NOT EXISTS catalog_meta (key TEXT PRIMARY KEY, value TEXT)"
@@ -78,10 +79,17 @@ def _ignore_duplicate_column(error: sqlite3.OperationalError) -> None:
 
 
 def open_catalog(path: Path) -> Path:
+    _require_existing(path)
+    require_healthy(path)
     if read_schema(path) is None:
         raise ValueError(f"Not a DarkLab catalog: {path}")
     apply_schema(database_file(path))
     return path
+
+
+def _require_existing(path: Path) -> None:
+    if not database_file(path).is_file():
+        raise FileNotFoundError(path)
 
 
 def read_schema(path: Path) -> str | None:

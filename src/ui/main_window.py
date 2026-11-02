@@ -14,6 +14,7 @@ from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
+from src.catalog.integrity import CatalogIntegrityError, check_integrity, require_healthy
 from src.catalog.startup_policy import plan_startup, require_catalog
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
@@ -204,6 +205,8 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._edit_catalog_settings)
         backup_action = file_menu.addAction("&Back Up Catalog")
         backup_action.triggered.connect(self._back_up_catalog)
+        check_action = file_menu.addAction("Check Catalog &Integrity")
+        check_action.triggered.connect(self._check_catalog_integrity)
         file_menu.addSeparator()
 
     def _back_up_catalog(self) -> None:
@@ -216,6 +219,13 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Back Up Catalog", str(error))
             return
         QMessageBox.information(self, "Back Up Catalog", f"Backup written to {backup}")
+
+    def _check_catalog_integrity(self) -> None:
+        if self.catalog_path is None:
+            return
+        report = check_integrity(self.catalog_path, full=True)
+        show = QMessageBox.information if report.healthy else QMessageBox.warning
+        show(self, "Check Catalog Integrity", report.describe())
 
     def _create_catalog(self) -> None:
         path = _selected_path(self._choose_save_path())
@@ -240,7 +250,7 @@ class MainWindow(QMainWindow):
         try:
             self._use_catalog(open_catalog(path))
         except (FileNotFoundError, ValueError) as error:
-            self.logger.error("Open catalog failed: %s", path)
+            self.logger.error("Open catalog failed: %s: %s", path, error)
             QMessageBox.warning(self, "Open Catalog", str(error))
 
     def _choose_save_path(self) -> str:
@@ -268,9 +278,20 @@ class MainWindow(QMainWindow):
         chosen = require_catalog(self._catalog_settings(), SelectCatalogDialog.pick)
         if chosen is None:
             return False
+        chosen = self._healthy_or_replacement(chosen)
+        if chosen is None:
+            return False
         if self.catalog_path != chosen:
             self._use_catalog(chosen)
         return True
+
+    def _healthy_or_replacement(self, chosen: Path) -> Path | None:
+        try:
+            require_healthy(chosen)
+        except CatalogIntegrityError as error:
+            QMessageBox.warning(self, "Open Catalog", str(error))
+            return SelectCatalogDialog.pick()
+        return chosen
 
     def _restore_catalog(self) -> None:
         action, path = plan_startup(self._catalog_settings())

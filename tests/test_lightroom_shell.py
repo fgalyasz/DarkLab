@@ -131,6 +131,7 @@ class LightroomShellTests(unittest.TestCase):
             self.assertIn("&Open Catalog...", titles)
             self.assertIn("Catalog &Settings...", titles)
             self.assertIn("&Back Up Catalog", titles)
+            self.assertIn("Check Catalog &Integrity", titles)
             window.panels["library"]._cancel_load()
             window.close()
 
@@ -158,6 +159,64 @@ class LightroomShellTests(unittest.TestCase):
                 with patch("src.ui.main_window.backup_catalog", side_effect=BackupError("denied")):
                     window._back_up_catalog()
                 box.warning.assert_called_once()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_integrity_check_without_a_catalog_does_nothing(self) -> None:
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = None
+            with patch("src.ui.main_window.check_integrity") as check:
+                window._check_catalog_integrity()
+            check.assert_not_called()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_integrity_check_reports_healthy_and_torn_catalogs(self) -> None:
+        from src.catalog.locations import database_file
+        from src.ui.main_window import MainWindow
+        catalog = sample_catalog()
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = catalog
+            with patch("src.ui.main_window.QMessageBox") as box:
+                window._check_catalog_integrity()
+                box.information.assert_called_once()
+                database_file(catalog).write_bytes(b"torn" * 500)
+                window._check_catalog_integrity()
+                box.warning.assert_called_once()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_launch_refuses_a_torn_catalog_and_asks_again(self) -> None:
+        from src.catalog.locations import database_file
+        from src.ui.main_window import MainWindow
+        torn = sample_catalog()
+        database_file(torn).write_bytes(b"torn" * 500)
+        healthy = sample_catalog()
+        chooser = patch("src.ui.main_window.SelectCatalogDialog.pick", return_value=healthy)
+        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("ask", None)), chooser:
+            window = MainWindow()
+            with patch("src.ui.main_window.require_catalog", return_value=torn):
+                with patch("src.ui.main_window.QMessageBox") as box:
+                    self.assertTrue(window.launch_window())
+                box.warning.assert_called_once()
+            self.assertEqual(window.catalog_path, healthy)
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_launch_stops_when_the_replacement_is_declined(self) -> None:
+        from src.catalog.locations import database_file
+        from src.ui.main_window import MainWindow
+        torn = sample_catalog()
+        database_file(torn).write_bytes(b"torn" * 500)
+        chooser = patch("src.ui.main_window.SelectCatalogDialog.pick", return_value=None)
+        with isolated_config(), patch("src.ui.main_window.plan_startup", return_value=("ask", None)), chooser:
+            window = MainWindow()
+            with patch("src.ui.main_window.require_catalog", return_value=torn):
+                with patch("src.ui.main_window.QMessageBox"):
+                    self.assertFalse(window.launch_window())
             window.panels["library"]._cancel_load()
             window.close()
 

@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from src.catalog.integrity import CatalogIntegrityError, require_healthy
 from src.catalog.locations import (
     DATABASE_NAME, PREVIEWS_NAME, SETTINGS_NAME, database_file, package_root,
 )
@@ -24,7 +25,10 @@ def default_backup_root(catalog: Path) -> Path:
     return root.with_name(f"{root.name}.backups")
 
 
-def backup_catalog(catalog: Path, destination_root: Path, moment: datetime | None = None) -> Path:
+def backup_catalog(
+    catalog: Path, destination_root: Path, moment: datetime | None = None, full_check: bool = False,
+) -> Path:
+    _require_healthy_source(catalog, full_check)
     stamp = (moment or datetime.now()).strftime(STAMP_FORMAT)
     target = destination_root / f"{package_root(catalog).stem}-{stamp}.darklab"
     _require_absent(target)
@@ -35,6 +39,13 @@ def backup_catalog(catalog: Path, destination_root: Path, moment: datetime | Non
         raise BackupError(f"Backup of {catalog} to {target} failed: {error}") from error
     logger.info("Catalog backed up to %s", target)
     return target
+
+
+def _require_healthy_source(catalog: Path, full_check: bool) -> None:
+    try:
+        require_healthy(catalog, full_check)
+    except CatalogIntegrityError as error:
+        raise BackupError(f"Backup refused: {error}") from error
 
 
 def restore_catalog(backup: Path, destination: Path) -> Path:
