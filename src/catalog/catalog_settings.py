@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from src.catalog.atomic_file import write_text_atomic
 from src.catalog.locations import settings_file
 
 
@@ -41,4 +42,4 @@ def _string_map(loaded: object) -> dict[str, str]:
 
 def _store_settings(path: Path, values: dict[str, str]) -> None:
     text = json.dumps(values, indent=2, sort_keys=True)
-    path.write_text(text + "\n", encoding="utf-8")
+    write_text_atomic(path, text + "\n")

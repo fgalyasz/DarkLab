@@ -5,23 +5,12 @@ from pathlib import Path
 
 from src.catalog.integrity import require_healthy
 from src.catalog.locations import database_file, prepare_package
+from src.catalog.migrations import migrate_catalog
+from src.catalog.schema_sql import (
+    ADD_COLOR, ADD_HASH, ADD_PICK, ADD_RATING, ADD_SETTINGS, FOLDERS_TABLE, META_ROW, META_TABLE,
+    PHOTO_TABLE, SCHEMA_QUERY,
+)
 
-META_TABLE = "CREATE TABLE IF NOT EXISTS catalog_meta (key TEXT PRIMARY KEY, value TEXT)"
-META_ROW = "INSERT OR IGNORE INTO catalog_meta (key, value) VALUES ('schema', '2')"
-PHOTO_TABLE = (
-    "CREATE TABLE IF NOT EXISTS photos "
-    "(id INTEGER PRIMARY KEY, original_path TEXT, content_hash TEXT)"
-)
-ADD_HASH = "ALTER TABLE photos ADD COLUMN content_hash TEXT"
-ADD_SETTINGS = "ALTER TABLE photos ADD COLUMN develop_settings TEXT"
-ADD_RATING = "ALTER TABLE photos ADD COLUMN rating TEXT"
-ADD_PICK = "ALTER TABLE photos ADD COLUMN pick TEXT"
-ADD_COLOR = "ALTER TABLE photos ADD COLUMN color TEXT"
-FOLDERS_TABLE = (
-    "CREATE TABLE IF NOT EXISTS folders "
-    "(id INTEGER PRIMARY KEY, folder_path TEXT NOT NULL UNIQUE)"
-)
-SCHEMA_QUERY = "SELECT value FROM catalog_meta WHERE key = 'schema'"
 PATH_QUERY = "SELECT original_path FROM photos ORDER BY id"
 
 
@@ -81,8 +70,10 @@ def _ignore_duplicate_column(error: sqlite3.OperationalError) -> None:
 def open_catalog(path: Path) -> Path:
     _require_existing(path)
     require_healthy(path)
-    if read_schema(path) is None:
+    stored = read_schema(path)
+    if stored is None:
         raise ValueError(f"Not a DarkLab catalog: {path}")
+    migrate_catalog(path, stored)
     apply_schema(database_file(path))
     return path
 

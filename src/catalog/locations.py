@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.catalog.atomic_file import write_text_atomic
+
 DATABASE_NAME = "catalog.sqlite"
 PREVIEWS_NAME = "previews"
 SETTINGS_NAME = "settings.json"
@@ -40,7 +42,7 @@ def prepare_package(destination: Path) -> None:
 def _ensure_settings(path: Path) -> None:
     if path.is_file():
         return
-    path.write_text("{}\n", encoding="utf-8")
+    write_text_atomic(path, "{}\n")
 
 
 def presets_file(catalog: Path) -> Path:

@@ -249,7 +249,7 @@ class MainWindow(QMainWindow):
     def _open_chosen_catalog(self, path: Path) -> None:
         try:
             self._use_catalog(open_catalog(path))
-        except (FileNotFoundError, ValueError) as error:
+        except (OSError, ValueError) as error:
             self.logger.error("Open catalog failed: %s: %s", path, error)
             QMessageBox.warning(self, "Open Catalog", str(error))
 

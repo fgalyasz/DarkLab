@@ -13,6 +13,8 @@ QUICK_CHECK = "PRAGMA quick_check"
 FULL_CHECK = "PRAGMA integrity_check"
 HEALTHY_ANSWER = "ok"
 MAX_REPORTED_PROBLEMS = 5
+RECOVERY_QUERY = "SELECT count(*) FROM sqlite_master"
+JOURNAL_SUFFIX = "-journal"
 
 
 class CatalogIntegrityError(ValueError):
@@ -38,7 +40,9 @@ class IntegrityReport:
 
 
 def check_integrity(catalog: Path, full: bool = False) -> IntegrityReport:
-    problems = _collect_problems(database_file(catalog), FULL_CHECK if full else QUICK_CHECK)
+    database = database_file(catalog)
+    _recover_interrupted_write(database)
+    problems = _collect_problems(database, FULL_CHECK if full else QUICK_CHECK)
     report = IntegrityReport(catalog, full, problems)
     if not report.healthy:
         logger.error(report.describe())
@@ -50,6 +54,26 @@ def require_healthy(catalog: Path, full: bool = False) -> IntegrityReport:
     if not report.healthy:
         raise CatalogIntegrityError(report.describe())
     return report
+
+
+def _recover_interrupted_write(database: Path) -> None:
+    journal = database.with_name(database.name + JOURNAL_SUFFIX)
+    interrupted = journal.is_file()
+    try:
+        _read_writable(database)
+    except sqlite3.DatabaseError as error:
+        logger.debug("No write recovery for %s: %s", database, error)
+        return
+    if interrupted and not journal.exists():
+        logger.warning("Rolled back a write interrupted before it was committed: %s", database)
+
+
+def _read_writable(database: Path) -> None:
+    connection = sqlite3.connect(f"{database.as_uri()}?mode=rw", uri=True)
+    try:
+        connection.execute(RECOVERY_QUERY).fetchone()
+    finally:
+        connection.close()
 
 
 def _collect_problems(database: Path, pragma: str) -> tuple[str, ...]:

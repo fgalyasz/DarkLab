@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.catalog.atomic_file import write_bytes_atomic
 from src.catalog.locations import preview_directory
 
 
@@ -9,7 +10,7 @@ def write_index_image(catalog: Path, photo_id: int, content: bytes) -> Path:
     _require_photo_id(photo_id)
     destination = index_image_path(catalog, photo_id)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(content)
+    write_bytes_atomic(destination, content)
     return destination
 
 
