@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import (
 from src.config.config_manager import ConfigManager
 from src.catalog.catalog_folders import catalog_folders, folder_photo_ids, relink_folder
 from src.catalog.cull_filter import filter_by_marks
-from src.catalog.index_images import index_image_path, list_index_images
+from src.catalog.index_images import index_image_path
+from src.catalog.preview_index import list_photo_indexes
 from src.catalog.marks import read_marks, write_mark
 from src.catalog.missing import RelinkError, missing_index_paths
 from src.catalog.photo_order import CAPTURE, IMPORTED, NAME, RATING, SortKeys, read_sort_keys, sort_indexes
@@ -397,7 +398,7 @@ class LibraryBrowserPanel(BasePanel):
     def _catalog_indexes(self) -> list[Path]:
         if self._catalog is None:
             return []
-        indexes = list_index_images(self._catalog)
+        indexes = list_photo_indexes(self._catalog)
         if self._folder is None:
             return indexes
         wanted = set(folder_photo_ids(self._catalog, self._folder))

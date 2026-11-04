@@ -132,6 +132,7 @@ class LightroomShellTests(unittest.TestCase):
             self.assertIn("Catalog &Settings...", titles)
             self.assertIn("&Back Up Catalog", titles)
             self.assertIn("Check Catalog &Integrity", titles)
+            self.assertIn("&Rebuild Previews", titles)
             window.panels["library"]._cancel_load()
             window.close()
 
@@ -186,6 +187,30 @@ class LightroomShellTests(unittest.TestCase):
                 database_file(catalog).write_bytes(b"torn" * 500)
                 window._check_catalog_integrity()
                 box.warning.assert_called_once()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_rebuild_previews_without_a_catalog_does_nothing(self) -> None:
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = None
+            with patch("src.ui.main_window.rebuild_previews") as rebuild:
+                window._rebuild_previews()
+            rebuild.assert_not_called()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_rebuild_previews_reports_and_refreshes_the_open_catalog(self) -> None:
+        from src.importing.previews import RebuildReport
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = sample_catalog()
+            with patch("src.ui.main_window.QMessageBox") as box:
+                with patch("src.ui.main_window.rebuild_previews", return_value=RebuildReport(1, 0)):
+                    window._rebuild_previews()
+            box.information.assert_called_once()
             window.panels["library"]._cancel_load()
             window.close()
 

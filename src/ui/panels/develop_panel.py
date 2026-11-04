@@ -15,7 +15,7 @@ from src.ui.develop_sections import (
     color_mixer_panel, crop_panel, detail_panel, effects_panel, history_list, lens_panel, presets_panel,
     tone_curve_panel, transform_panel,
 )
-from src.catalog.index_images import list_index_images
+from src.catalog.preview_index import list_photo_indexes
 from src.catalog.marks import read_photo_marks
 from src.catalog.removal import photo_id_of_index
 from src.develop.crop_settings import CropSettings, decode_crop
@@ -293,7 +293,7 @@ class DevelopPanel(BasePanel):
     def _catalog_indexes(self) -> list[Path]:
         if self._catalog is None:
             return []
-        return list_index_images(self._catalog)
+        return list_photo_indexes(self._catalog)
 
     def _show_paths(self, paths: list[Path]) -> None:
         self._photos = list(paths)

@@ -15,6 +15,7 @@ from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.integrity import CatalogIntegrityError, check_integrity, require_healthy
+from src.importing.previews import rebuild_previews
 from src.catalog.startup_policy import plan_startup, require_catalog
 from src.config.config_manager import ConfigManager
 from src.ui.themes import DarkTheme, StyleSheet
@@ -207,6 +208,8 @@ class MainWindow(QMainWindow):
         backup_action.triggered.connect(self._back_up_catalog)
         check_action = file_menu.addAction("Check Catalog &Integrity")
         check_action.triggered.connect(self._check_catalog_integrity)
+        rebuild_action = file_menu.addAction("&Rebuild Previews")
+        rebuild_action.triggered.connect(self._rebuild_previews)
         file_menu.addSeparator()
 
     def _back_up_catalog(self) -> None:
@@ -226,6 +229,13 @@ class MainWindow(QMainWindow):
         report = check_integrity(self.catalog_path, full=True)
         show = QMessageBox.information if report.healthy else QMessageBox.warning
         show(self, "Check Catalog Integrity", report.describe())
+
+    def _rebuild_previews(self) -> None:
+        if self.catalog_path is None:
+            return
+        report = rebuild_previews(self.catalog_path)
+        self._refresh_open_catalog()
+        QMessageBox.information(self, "Rebuild Previews", report.describe())
 
     def _create_catalog(self) -> None:
         path = _selected_path(self._choose_save_path())
