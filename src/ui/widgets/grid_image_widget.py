@@ -14,6 +14,7 @@ class GridImageWidget(QWidget):
     
     selection_changed = pyqtSignal(object)
     marker_changed = pyqtSignal(object, str, str)  # image_path, marker_type, value
+    thumbnails_needed = pyqtSignal(object)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -53,7 +54,8 @@ class GridImageWidget(QWidget):
         """Set the list of images to display."""
         self.images = images
         # Only clear thumbnails that are no longer in the images list
-        thumbnails_to_remove = [path for path in self.thumbnails if path not in images]
+        kept = set(images)
+        thumbnails_to_remove = [path for path in self.thumbnails if path not in kept]
         for path in thumbnails_to_remove:
             del self.thumbnails[path]
         self.selected_images = []
@@ -76,6 +78,28 @@ class GridImageWidget(QWidget):
         if image_path in self.images:
             self.thumbnails[image_path] = thumbnail
             self.update()
+
+    def remove_thumbnail(self, image_path: Path) -> None:
+        if self.thumbnails.pop(image_path, None) is not None:
+            self.update()
+
+    def index_range(self, top: int, bottom: int) -> range:
+        step = self.cell_height + self.spacing
+        first = max(0, top // step) * self.columns
+        last = (max(0, bottom) // step + 1) * self.columns
+        return range(min(first, len(self.images)), min(last, len(self.images)))
+
+    def visible_indexes(self) -> range:
+        rect = self.visibleRegion().boundingRect()
+        if rect.isEmpty():
+            return range(0)
+        margin = self.cell_height + self.spacing
+        return self.index_range(rect.top() - margin, rect.bottom() + margin)
+
+    def request_visible_thumbnails(self) -> None:
+        wanted = [self.images[i] for i in self.visible_indexes() if self.images[i] not in self.thumbnails]
+        if wanted:
+            self.thumbnails_needed.emit(wanted)
 
     def set_missing_images(self, missing: set[Path]) -> None:
         self.missing_images = set(missing)
@@ -133,17 +157,20 @@ class GridImageWidget(QWidget):
     
     def _get_index_at_pos(self, pos: QPoint) -> int:
         """Get the image index at the given position."""
-        for i in range(len(self.images)):
-            if self._get_cell_rect(i).contains(pos):
-                return i
-        return -1
+        step = self.cell_height + self.spacing
+        row, column = pos.y() // step, (pos.x() - self.left_margin) // (self.cell_width + self.spacing)
+        index = row * self.columns + column
+        if pos.x() < self.left_margin or column >= self.columns or not self._get_cell_rect(index).contains(pos):
+            return -1
+        return index
     
     def paintEvent(self, event) -> None:
         """Paint the grid of images."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        for i, image_path in enumerate(self.images):
+        for i in self.index_range(event.rect().top(), event.rect().bottom()):
+            image_path = self.images[i]
             cell_rect = self._get_cell_rect(i)
             if not cell_rect.intersects(event.rect()):
                 continue
@@ -194,7 +221,7 @@ class GridImageWidget(QWidget):
                 painter.drawPixmap(thumb_rect, thumbnail)
             
             # Paint rating stars below image
-            self._paint_rating_marker(painter, image_path, cell_rect, image_rect, bg_color)
+            self._paint_rating_marker(painter, image_path, cell_rect, image_rect, bg_color, is_hovered)
             
             text_rect = QRect(
                 cell_rect.x() + self.card_margin,
@@ -213,6 +240,8 @@ class GridImageWidget(QWidget):
             painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, elided_text)
             self._paint_markers(painter, image_path, cell_rect, bg_color)
             self._paint_missing_badge(painter, image_path, cell_rect)
+        painter.end()
+        self.request_visible_thumbnails()
 
     def _paint_missing_badge(self, painter: QPainter, image_path: Path, cell_rect: QRect) -> None:
         if image_path not in self.missing_images:
@@ -255,13 +284,12 @@ class GridImageWidget(QWidget):
             painter.drawRoundedRect(checkbox_rect, 3, 3)
             painter.setBrush(Qt.BrushStyle.NoBrush)
 
-    def _paint_rating_marker(self, painter: QPainter, image_path: Path, cell_rect: QRect, image_rect: QRect, bg_color: QColor) -> None:
+    def _paint_rating_marker(self, painter: QPainter, image_path: Path, cell_rect: QRect, image_rect: QRect, bg_color: QColor, is_hovered: bool) -> None:
         """Paint rating stars below the image. Always shows 5 stars with inactive ones dimmed."""
         marker_data = self.image_markers.get(image_path, {})
         current_rating = int(marker_data.get("rating", "0") or "0")
         
         # Determine effective rating (hover takes precedence for visual feedback)
-        is_hovered = self.hovered_index == self.images.index(image_path) if image_path in self.images else False
         effective_rating = self.hovered_rating if is_hovered and self.hovered_rating > 0 else current_rating
         
         # Calculate rating strip position (below image, above filename)

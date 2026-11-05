@@ -15,12 +15,13 @@ from src.config.config_manager import ConfigManager
 from src.catalog.catalog_folders import catalog_folders, folder_photo_ids, relink_folder
 from src.catalog.cull_filter import filter_by_marks
 from src.catalog.index_images import index_image_path
-from src.catalog.preview_index import list_photo_indexes
+from src.catalog.photo_pages import list_catalog_indexes
 from src.catalog.marks import read_marks, write_mark
 from src.catalog.missing import RelinkError, missing_index_paths
 from src.catalog.photo_order import CAPTURE, IMPORTED, NAME, RATING, SortKeys, read_sort_keys, sort_indexes
 from src.catalog.removal import photo_id_of_index, remove_indexes
 from src.exporting.batch import export_photos
+from src.imaging.lru_cache import LruCache
 from src.exporting.messages import report_summary
 from src.ui.dialogs.export_dialog import ExportDialog
 from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
@@ -38,6 +39,8 @@ from src.ui.widgets.histogram_widget import HistogramWidget
 
 
 logger = logging.getLogger(__name__)
+
+THUMB_CACHE_LIMIT = 400
 
 PICK_CHOICES = (
     ("Flag: Any", "any"),
@@ -65,6 +68,7 @@ class ThumbRelay(QObject):
 
     def receive(self, path: str, _name: str, image: QImage) -> None:
         self._panel._on_thumb(path, image, self._session)
+        self._panel._release_relay(self)
 
 
 class LibraryBrowserPanel(BasePanel):
@@ -78,7 +82,8 @@ class LibraryBrowserPanel(BasePanel):
         self._folder: Path | None = None
         self._sort_keys = SortKeys()
         self._selected: list[Path] = []
-        self._thumbs: dict[Path, QPixmap] = {}
+        self._thumbs: LruCache[Path, QPixmap] = LruCache(THUMB_CACHE_LIMIT)
+        self._requested: set[Path] = set()
         self._keywords: dict[str, str] = {}
         self._comments: dict[str, str] = {}
         self._active_path = ""
@@ -237,6 +242,7 @@ class LibraryBrowserPanel(BasePanel):
     def _build_grid(self) -> GridImageWidget:
         self.grid = GridImageWidget()
         self.grid.selection_changed.connect(self._on_grid_selection)
+        self.grid.thumbnails_needed.connect(self._request_thumbs)
         self.grid.marker_changed.connect(self._on_marker_changed)
         return self.grid
 
@@ -398,7 +404,7 @@ class LibraryBrowserPanel(BasePanel):
     def _catalog_indexes(self) -> list[Path]:
         if self._catalog is None:
             return []
-        indexes = list_photo_indexes(self._catalog)
+        indexes = list_catalog_indexes(self._catalog)
         if self._folder is None:
             return indexes
         wanted = set(folder_photo_ids(self._catalog, self._folder))
@@ -466,36 +472,57 @@ class LibraryBrowserPanel(BasePanel):
         return sort_indexes(marked, str(self.sort_combo.currentData()), self._sort_keys, self.grid.image_markers)
 
     def _restore_thumbs(self, paths: list[Path]) -> None:
-        for path in paths:
-            pixmap = self._thumbs.get(path)
-            if pixmap is not None:
-                self.grid.set_thumbnail(path, pixmap)
-                self.filmstrip.set_thumbnail(path, pixmap)
+        shown = set(paths)
+        for path in self._thumbs.keys():
+            if path in shown:
+                self._show_thumb(path, self._thumbs.get(path))
+
+    def _show_thumb(self, path: Path, pixmap: QPixmap | None) -> None:
+        if pixmap is None:
+            return
+        self.grid.set_thumbnail(path, pixmap)
+        self.filmstrip.set_thumbnail(path, pixmap)
 
     def _start_thumbs(self) -> None:
         self._session += 1
-        session = self._session
         self._relays.clear()
-        for index, path in enumerate(self.grid.images):
-            self._queue_thumb(path, index, session)
+        self._requested = set(self._thumbs.keys())
+        self.grid.request_visible_thumbnails()
 
-    def _queue_thumb(self, path: Path, index: int, session: int) -> None:
+    def _request_thumbs(self, paths: list) -> None:
+        for path in paths:
+            if path not in self._requested:
+                self._requested.add(path)
+                self._queue_thumb(path, self._session)
+
+    def _queue_thumb(self, path: Path, session: int) -> None:
         relay = ThumbRelay(self, session)
-        runnable = ImageProcessorRunnable([str(path)], index, 280)
+        runnable = ImageProcessorRunnable([str(path)], len(self._relays), 280)
         runnable.signals.image_found.connect(relay.receive)
         self._relays.append(relay)
         self._pool.start(runnable)
+
+    def _release_relay(self, relay: ThumbRelay) -> None:
+        if relay in self._relays:
+            self._relays.remove(relay)
 
     def _on_thumb(self, path: str, image: QImage, session: int) -> None:
         if session != self._session or image.isNull():
             return
         photo = Path(path)
-        pixmap = QPixmap.fromImage(image)
-        self._thumbs[photo] = pixmap
-        self.grid.set_thumbnail(photo, pixmap)
-        self.filmstrip.set_thumbnail(photo, pixmap)
+        self._cache_thumb(photo, QPixmap.fromImage(image))
         if self._selected and self._selected[-1] == photo:
             self._set_navigator(image)
+
+    def _cache_thumb(self, photo: Path, pixmap: QPixmap) -> None:
+        for evicted in self._thumbs.put(photo, pixmap):
+            self._forget_thumb(evicted)
+        self._show_thumb(photo, pixmap)
+
+    def _forget_thumb(self, path: Path) -> None:
+        self._requested.discard(path)
+        self.grid.remove_thumbnail(path)
+        self.filmstrip.clear_thumbnail(path)
 
     def _cancel_load(self) -> None:
         self._session += 1

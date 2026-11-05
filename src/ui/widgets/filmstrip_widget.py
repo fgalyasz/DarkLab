@@ -18,19 +18,31 @@ class FilmstripWidget(QListWidget):
         self.setIconSize(QSize(96, 64))
         self.setSpacing(6)
         self.setFixedHeight(104)
+        self._items: dict[str, QListWidgetItem] = {}
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.currentItemChanged.connect(self._emit_current)
 
     def set_photos(self, paths: list[Path]) -> None:
         self.clear()
+        self._items = {}
         for path in paths:
-            self.addItem(self._item(path))
+            self._add_photo(path)
+
+    def _add_photo(self, path: Path) -> None:
+        item = self._item(path)
+        self._items[str(path)] = item
+        self.addItem(item)
 
     def set_thumbnail(self, path: Path, pixmap: QPixmap) -> None:
         item = self._find(path)
         if item is not None:
             item.setIcon(QIcon(pixmap))
+
+    def clear_thumbnail(self, path: Path) -> None:
+        item = self._find(path)
+        if item is not None:
+            item.setIcon(QIcon())
 
     def select_photo(self, path: Path) -> None:
         item = self._find(path)
@@ -44,11 +56,7 @@ class FilmstripWidget(QListWidget):
         return item
 
     def _find(self, path: Path) -> QListWidgetItem | None:
-        for index in range(self.count()):
-            item = self.item(index)
-            if item and item.data(Qt.ItemDataRole.UserRole) == str(path):
-                return item
-        return None
+        return self._items.get(str(path))
 
     def _emit_current(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None) -> None:
         if current is not None:

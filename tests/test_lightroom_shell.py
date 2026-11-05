@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -8,6 +9,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from src.catalog.cull_filter import matches_rating
+from src.catalog.locations import database_file
 from src.imaging.preview_tone import tone_channel
 from src.ui.import_summary import format_byte_count, import_status_text
 from src.ui.library_catalog import (
@@ -273,6 +275,9 @@ class LightroomShellTests(unittest.TestCase):
         self.assertEqual(panel.grid.images, [])
         image = write_index_image(catalog, 3, b"jpeg")
         panel.show_catalog(catalog)
+        self.assertEqual(panel.grid.images, [])
+        _insert_photo(catalog, 3)
+        panel.show_catalog(catalog)
         self.assertEqual(panel.grid.images, [image])
         panel.show_catalog(sample_catalog())
         self.assertEqual(panel.grid.images, [])
@@ -469,6 +474,13 @@ def close_library(panel) -> None:
     panel._cancel_load()
     panel._host.close()
     panel.close()
+
+
+def _insert_photo(catalog: Path, photo_id: int) -> None:
+    connection = sqlite3.connect(database_file(catalog))
+    with connection:
+        connection.execute("INSERT INTO photos (id, original_path) VALUES (?, ?)", (photo_id, "/shoot/a.jpg"))
+    connection.close()
 
 
 def sample_catalog() -> Path:
