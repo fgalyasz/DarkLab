@@ -135,6 +135,7 @@ class LightroomShellTests(unittest.TestCase):
             self.assertIn("&Back Up Catalog", titles)
             self.assertIn("Check Catalog &Integrity", titles)
             self.assertIn("&Rebuild Previews", titles)
+            self.assertIn("&Optimize Catalog", titles)
             window.panels["library"]._cancel_load()
             window.close()
 
@@ -188,6 +189,33 @@ class LightroomShellTests(unittest.TestCase):
                 box.information.assert_called_once()
                 database_file(catalog).write_bytes(b"torn" * 500)
                 window._check_catalog_integrity()
+                box.warning.assert_called_once()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_optimize_without_a_catalog_does_nothing(self) -> None:
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = None
+            with patch("src.ui.main_window.optimize_catalog") as optimize:
+                window._optimize_catalog()
+            optimize.assert_not_called()
+            window.panels["library"]._cancel_load()
+            window.close()
+
+    def test_optimize_reports_success_and_failure(self) -> None:
+        from src.catalog.optimize import CatalogOptimizeError, OptimizeReport
+        from src.ui.main_window import MainWindow
+        with isolated_config():
+            window = MainWindow()
+            window.catalog_path = sample_catalog()
+            with patch("src.ui.main_window.QMessageBox") as box:
+                with patch("src.ui.main_window.optimize_catalog", return_value=OptimizeReport((), 2, 1)):
+                    window._optimize_catalog()
+                box.information.assert_called_once()
+                with patch("src.ui.main_window.optimize_catalog", side_effect=CatalogOptimizeError("locked")):
+                    window._optimize_catalog()
                 box.warning.assert_called_once()
             window.panels["library"]._cancel_load()
             window.close()

@@ -27,3 +27,16 @@ PHOTO_COLUMN_STATEMENTS = {
     "pick": ADD_PICK,
     "color": ADD_COLOR,
 }
+
+CATALOG_INDEXES = {
+    "idx_photos_content_hash": (
+        "CREATE INDEX IF NOT EXISTS idx_photos_content_hash ON photos (content_hash)"
+    ),
+    "idx_photos_original_path": (
+        "CREATE INDEX IF NOT EXISTS idx_photos_original_path ON photos (original_path)"
+    ),
+    "idx_photos_pick_rating": (
+        "CREATE INDEX IF NOT EXISTS idx_photos_pick_rating ON photos (pick, rating)"
+    ),
+}
+INDEX_NAMES_QUERY = "SELECT name FROM sqlite_master WHERE type = 'index'"

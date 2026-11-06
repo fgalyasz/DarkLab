@@ -15,6 +15,7 @@ from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.integrity import CatalogIntegrityError, check_integrity, require_healthy
+from src.catalog.optimize import CatalogOptimizeError, optimize_catalog
 from src.importing.previews import rebuild_previews
 from src.catalog.startup_policy import plan_startup, require_catalog
 from src.config.config_manager import ConfigManager
@@ -27,6 +28,7 @@ from src.ui.panels.print_panel import PrintPanel
 from src.ui.panels.slideshow_panel import SlideshowPanel
 from src.ui.panels.website_panel import WebsitePanel
 from src.ui.catalog_filter import CATALOG_FILTER
+from src.ui.progress_reporter import ProgressReporter
 from src.ui.dialogs import ImportDialog
 from src.ui.dialogs.catalog_settings_dialog import CatalogSettingsDialog
 from src.ui.dialogs.select_catalog_dialog import SelectCatalogDialog
@@ -208,6 +210,8 @@ class MainWindow(QMainWindow):
         backup_action.triggered.connect(self._back_up_catalog)
         check_action = file_menu.addAction("Check Catalog &Integrity")
         check_action.triggered.connect(self._check_catalog_integrity)
+        optimize_action = file_menu.addAction("&Optimize Catalog")
+        optimize_action.triggered.connect(self._optimize_catalog)
         rebuild_action = file_menu.addAction("&Rebuild Previews")
         rebuild_action.triggered.connect(self._rebuild_previews)
         file_menu.addSeparator()
@@ -229,6 +233,19 @@ class MainWindow(QMainWindow):
         report = check_integrity(self.catalog_path, full=True)
         show = QMessageBox.information if report.healthy else QMessageBox.warning
         show(self, "Check Catalog Integrity", report.describe())
+
+    def _optimize_catalog(self) -> None:
+        if self.catalog_path is None:
+            return
+        reporter = ProgressReporter(self, "Optimize Catalog")
+        try:
+            report = optimize_catalog(self.catalog_path, reporter)
+        except CatalogOptimizeError as error:
+            reporter.close()
+            QMessageBox.warning(self, "Optimize Catalog", str(error))
+            return
+        reporter.close()
+        QMessageBox.information(self, "Optimize Catalog", report.describe())
 
     def _rebuild_previews(self) -> None:
         if self.catalog_path is None:
