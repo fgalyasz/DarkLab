@@ -37,6 +37,8 @@ jobs:
           printf '%s\n' "${WRANGLER_CONFIG}" > "${HOME}/Library/Preferences/.wrangler/config/default.toml"
           chmod 600 "${HOME}/Library/Preferences/.wrangler/config/default.toml"
       - name: Deploy product site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           chmod +x ./scripts/deploy_site.sh
           ./scripts/deploy_site.sh
