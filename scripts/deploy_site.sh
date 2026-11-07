@@ -9,9 +9,14 @@ GATEWAY="${ROOT}/.gateway-site"
 version="$(tr -d ' \t\n\r' < "${ROOT}/docs/version.txt")"
 
 [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+tag="v${version}"
+download_url="https://github.com/fgalyasz/DarkLab/releases/download/${tag}/${PACKAGE_NAME}.dmg"
+gh release create "${tag}" "${ROOT}/dist/${PACKAGE_NAME}.dmg" \
+  --repo fgalyasz/DarkLab \
+  --title "${PACKAGE_NAME} ${version}" \
+  --notes "macOS installer ${version}. Signed for the build and not notarized."
 rm -rf "${GATEWAY}"
 mkdir -p "${GATEWAY}"
-cp "${ROOT}/dist/${PACKAGE_NAME}.dmg" "${GATEWAY}/"
 cat > "${GATEWAY}/index.html" <<EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -27,7 +32,7 @@ cat > "${GATEWAY}/index.html" <<EOF
 <body>
   <h1>${PACKAGE_NAME}</h1>
   <p>Version ${version}</p>
-  <p><a href="./${PACKAGE_NAME}.dmg">Download ${PACKAGE_NAME}.dmg</a></p>
+  <p><a href="${download_url}">Download ${PACKAGE_NAME}.dmg</a></p>
   <p>This macOS image is signed for the build and is not notarized.</p>
 </body>
 </html>
