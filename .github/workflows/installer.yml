@@ -1,0 +1,35 @@
+name: Installer image
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install native deps
+        run: brew install inih
+      - name: Import signing identity
+        env:
+          CODESIGN_P12_BASE64: ${{ secrets.CODESIGN_P12_BASE64 }}
+          CODESIGN_P12_PASSWORD: ${{ secrets.CODESIGN_P12_PASSWORD }}
+          CODESIGN_KEYCHAIN_PASSWORD: ${{ secrets.CODESIGN_KEYCHAIN_PASSWORD }}
+        run: bash scripts/ci_import_signing.sh darklab-signing "DarkLab Local"
+      - name: Build installer image
+        run: |
+          chmod +x ./scripts/build_dmg.sh ./scripts/ci_import_signing.sh
+          ./scripts/build_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DarkLab-installer
+          path: dist/DarkLab.dmg
+          if-no-files-found: error
