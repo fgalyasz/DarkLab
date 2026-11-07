@@ -12,6 +12,7 @@ sparkle_dir="${3:-}"
 keychain="${HOME}/Library/Keychains/${basename}.keychain-db"
 work="${RUNNER_TEMP:-$(mktemp -d)}"
 p12="${work}/identity.p12"
+cert="${work}/cert.pem"
 mkdir -p "$(dirname "$keychain")"
 printf '%s' "${CODESIGN_P12_BASE64}" | base64 -D > "${p12}"
 security create-keychain -p "${CODESIGN_KEYCHAIN_PASSWORD}" "${keychain}"
@@ -23,13 +24,26 @@ security import "${p12}" \
   -A \
   -T /usr/bin/codesign \
   -T /usr/bin/security
+/usr/bin/openssl pkcs12 \
+  -in "${p12}" \
+  -clcerts \
+  -nokeys \
+  -passin "pass:${CODESIGN_P12_PASSWORD}" \
+  -out "${cert}"
+sudo security add-trusted-cert \
+  -d \
+  -r trustRoot \
+  -p codeSign \
+  -k /Library/Keychains/System.keychain \
+  "${cert}"
 security list-keychains -d user -s "${keychain}" "${HOME}/Library/Keychains/login.keychain-db"
+security default-keychain -s "${keychain}"
 security set-key-partition-list \
   -S apple-tool:,apple:,codesign: \
   -s \
   -k "${CODESIGN_KEYCHAIN_PASSWORD}" \
   "${keychain}" >/dev/null || true
-rm -f "${p12}"
+rm -f "${p12}" "${cert}"
 security find-identity -v -p codesigning "${keychain}"
 security find-identity -v -p codesigning "${keychain}" | grep -F "\"${identity_name}\"" >/dev/null
 
