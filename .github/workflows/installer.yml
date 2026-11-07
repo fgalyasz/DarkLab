@@ -29,6 +29,17 @@ jobs:
         run: |
           chmod +x ./scripts/build_dmg.sh ./scripts/ci_import_signing.sh ./scripts/ci_commit_release.sh
           ./scripts/build_dmg.sh
+      - name: Restore Cloudflare login
+        env:
+          WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
+        run: |
+          mkdir -p "${HOME}/Library/Preferences/.wrangler/config"
+          printf '%s\n' "${WRANGLER_CONFIG}" > "${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          chmod 600 "${HOME}/Library/Preferences/.wrangler/config/default.toml"
+      - name: Deploy product site
+        run: |
+          chmod +x ./scripts/deploy_site.sh
+          ./scripts/deploy_site.sh
       - name: Commit version
         run: bash scripts/ci_commit_release.sh
       - uses: actions/upload-artifact@v4
