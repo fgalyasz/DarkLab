@@ -7,7 +7,7 @@ from src.catalog.integrity import require_healthy
 from src.catalog.locations import database_file, prepare_package
 from src.catalog.migrations import migrate_catalog
 from src.catalog.schema_sql import (
-    ADD_COLOR, ADD_HASH, ADD_PICK, ADD_RATING, ADD_SETTINGS, FOLDERS_TABLE, META_ROW, META_TABLE,
+    ADD_CAPTURE, ADD_COLOR, ADD_HASH, ADD_PICK, ADD_RATING, ADD_SETTINGS, FOLDERS_TABLE, META_ROW, META_TABLE,
     PHOTO_TABLE, SCHEMA_QUERY,
 )
 
@@ -41,7 +41,7 @@ def apply_schema(path: Path) -> None:
 
 
 def _ensure_marks(connection: sqlite3.Connection) -> None:
-    for statement in (ADD_RATING, ADD_PICK, ADD_COLOR):
+    for statement in (ADD_RATING, ADD_PICK, ADD_COLOR, ADD_CAPTURE):
         _ensure_column(connection, statement)
 
 

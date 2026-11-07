@@ -15,6 +15,7 @@ class GridImageWidget(QWidget):
     selection_changed = pyqtSignal(object)
     marker_changed = pyqtSignal(object, str, str)  # image_path, marker_type, value
     thumbnails_needed = pyqtSignal(object)
+    paths_visible = pyqtSignal(object)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,16 +55,20 @@ class GridImageWidget(QWidget):
         """Set the list of images to display."""
         self.images = images
         # Only clear thumbnails that are no longer in the images list
-        kept = set(images)
-        thumbnails_to_remove = [path for path in self.thumbnails if path not in kept]
-        for path in thumbnails_to_remove:
-            del self.thumbnails[path]
+        self._drop_thumbnails_outside(images)
         self.selected_images = []
         self.hovered_index = -1
         self.selection_anchor_index = -1
         self._update_size()
         self.update()
     
+    def _drop_thumbnails_outside(self, images: List[Path]) -> None:
+        if not self.thumbnails:
+            return
+        kept = set(images)
+        for path in [path for path in self.thumbnails if path not in kept]:
+            del self.thumbnails[path]
+
     def add_image(self, image_path: Path, thumbnail: Optional[QPixmap] = None) -> None:
         """Add a single image to the grid."""
         if image_path not in self.images:
@@ -97,7 +102,10 @@ class GridImageWidget(QWidget):
         return self.index_range(rect.top() - margin, rect.bottom() + margin)
 
     def request_visible_thumbnails(self) -> None:
-        wanted = [self.images[i] for i in self.visible_indexes() if self.images[i] not in self.thumbnails]
+        shown = [self.images[i] for i in self.visible_indexes()]
+        if shown:
+            self.paths_visible.emit(shown)
+        wanted = [path for path in shown if path not in self.thumbnails]
         if wanted:
             self.thumbnails_needed.emit(wanted)
 

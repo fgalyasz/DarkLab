@@ -230,7 +230,11 @@ class MainWindow(QMainWindow):
     def _check_catalog_integrity(self) -> None:
         if self.catalog_path is None:
             return
+        reporter = ProgressReporter(self, "Check Catalog Integrity")
+        reporter(0, 1, "Checking the Catalog")
         report = check_integrity(self.catalog_path, full=True)
+        reporter(1, 1, "Catalog checked")
+        reporter.close()
         show = QMessageBox.information if report.healthy else QMessageBox.warning
         show(self, "Check Catalog Integrity", report.describe())
 

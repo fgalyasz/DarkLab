@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,7 +13,9 @@ from src.catalog.locations import database_file
 logger = logging.getLogger(__name__)
 
 ALL_PHOTOS = "SELECT id, original_path, content_hash FROM photos ORDER BY id"
+ROWS_OF_IDS = "SELECT id, original_path FROM photos WHERE id IN ({marks})"
 READ_PHOTO = "SELECT original_path, content_hash FROM photos WHERE id = ?"
+CHUNK_SIZE = 500
 WRITE_LINK = "UPDATE photos SET original_path = ?, content_hash = ? WHERE id = ?"
 
 
@@ -34,6 +37,12 @@ def missing_photos(catalog: Path) -> list[MissingPhoto]:
     return missing
 
 
+def missing_photo_ids(catalog: Path, photo_ids: Collection[int]) -> set[int]:
+    wanted = sorted(set(photo_ids))
+    chunks = [wanted[start:start + CHUNK_SIZE] for start in range(0, len(wanted), CHUNK_SIZE)]
+    return {photo_id for chunk in chunks for photo_id in _missing_in_chunk(catalog, chunk)}
+
+
 def missing_index_paths(catalog: Path) -> set[Path]:
     return {index_image_path(catalog, photo.photo_id) for photo in missing_photos(catalog)}
 
@@ -49,6 +58,16 @@ def relink_photo(catalog: Path, photo_id: int, replacement: Path, confirm_differ
     digest = content_hash(replacement)
     _require_same_content(catalog, photo_id, replacement, digest, confirm_different)
     _write_link(catalog, photo_id, replacement, digest)
+
+
+def _missing_in_chunk(catalog: Path, chunk: list[int]) -> list[int]:
+    marks = ", ".join("?" for _ in chunk)
+    connection = sqlite3.connect(database_file(catalog))
+    try:
+        rows = connection.execute(ROWS_OF_IDS.format(marks=marks), chunk).fetchall()
+    finally:
+        connection.close()
+    return [int(row[0]) for row in rows if not Path(str(row[1])).is_file()]
 
 
 def _all_rows(catalog: Path) -> list[tuple[object, ...]]:

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.catalog.capture_time import fill_missing_capture_times
 from src.catalog.integrity import CatalogIntegrityError, require_healthy
 from src.catalog.locations import database_file
 from src.catalog.schema_sql import CATALOG_INDEXES, INDEX_NAMES_QUERY
@@ -17,6 +18,7 @@ ProgressCallback = Callable[[int, int, str], None]
 STEP_LABELS = (
     "Checking the Catalog",
     "Creating indexes",
+    "Reading capture times",
     "Updating statistics",
     "Compacting free space",
     "Verifying the Catalog",
@@ -88,13 +90,16 @@ class _CatalogOptimizer:
         return OptimizeReport(self._created, before, self._database.stat().st_size)
 
     def _steps(self) -> tuple[Callable[[], None], ...]:
-        return (self._check, self._index, self._analyze, self._vacuum, self._verify)
+        return (self._check, self._index, self._capture, self._analyze, self._vacuum, self._verify)
 
     def _check(self) -> None:
         require_healthy(self._catalog)
 
     def _index(self) -> None:
         self._created = _create_indexes(self._database)
+
+    def _capture(self) -> None:
+        fill_missing_capture_times(self._catalog)
 
     def _analyze(self) -> None:
         _run_statement(self._database, ANALYZE)

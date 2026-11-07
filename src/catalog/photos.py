@@ -3,12 +3,13 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from src.catalog.capture_time import capture_time
 from src.catalog.file_hash import content_hash
 from src.catalog.locations import database_file
 
 FIND_PHOTO = "SELECT id FROM photos WHERE original_path = ?"
 FIND_HASH = "SELECT id FROM photos WHERE content_hash = ? ORDER BY id LIMIT 1"
-INSERT_PHOTO = "INSERT INTO photos (original_path, content_hash) VALUES (?, ?)"
+INSERT_PHOTO = "INSERT INTO photos (original_path, content_hash, capture_time) VALUES (?, ?, ?)"
 MISSING_HASH = "SELECT id, original_path FROM photos WHERE content_hash IS NULL"
 WRITE_HASH = "UPDATE photos SET content_hash = ? WHERE id = ? AND content_hash IS NULL"
 READ_HASH = "SELECT content_hash FROM photos WHERE original_path = ?"
@@ -96,7 +97,7 @@ def _hash_id(database: Path, digest: str) -> int | None:
 def _insert_photo(database: Path, original: str, digest: str) -> int:
     connection = sqlite3.connect(database)
     try:
-        cursor = connection.execute(INSERT_PHOTO, (original, digest))
+        cursor = connection.execute(INSERT_PHOTO, (original, digest, capture_time(Path(original))))
         connection.commit()
         return int(cursor.lastrowid)
     finally:

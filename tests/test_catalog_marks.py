@@ -127,7 +127,7 @@ class LibraryMarksTests(unittest.TestCase):
 
     def test_other_photos_show_no_marks(self) -> None:
         panel = _library(self.catalog)
-        self.assertEqual(panel.grid.image_markers[self.index], NO_MARKS)
+        self.assertNotIn(self.index, panel.grid.image_markers)
 
     def test_no_catalog_has_no_markers(self) -> None:
         panel = _library(self.catalog)

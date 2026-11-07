@@ -175,17 +175,17 @@ class FilmstripCacheTests(unittest.TestCase):
         strip = FilmstripWidget()
         strip.set_photos([Path("a.jpg"), Path("b.jpg")])
         strip.set_thumbnail(Path("a.jpg"), QPixmap(8, 8))
-        self.assertFalse(strip.item(0).icon().isNull())
+        self.assertTrue(strip.has_thumbnail(Path("a.jpg")))
         strip.clear_thumbnail(Path("a.jpg"))
         strip.clear_thumbnail(Path("zzz.jpg"))
-        self.assertTrue(strip.item(0).icon().isNull())
+        self.assertFalse(strip.has_thumbnail(Path("a.jpg")))
 
     def test_lookup_follows_the_current_photos(self) -> None:
         strip = FilmstripWidget()
         strip.set_photos([Path("a.jpg")])
         strip.set_photos([Path("b.jpg")])
         strip.set_thumbnail(Path("a.jpg"), QPixmap(8, 8))
-        self.assertTrue(strip.item(0).icon().isNull())
+        self.assertFalse(strip.has_thumbnail(Path("a.jpg")))
 
 
 class LibraryWindowTests(unittest.TestCase):
@@ -228,8 +228,8 @@ class LibraryWindowTests(unittest.TestCase):
         panel._on_thumb(str(first), _image(), panel._session)
         panel._on_thumb(str(second), _image(), panel._session)
         self.assertNotIn(first, panel.grid.thumbnails)
-        self.assertTrue(panel.filmstrip.item(0).icon().isNull())
-        self.assertFalse(panel.filmstrip.item(1).icon().isNull())
+        self.assertFalse(panel.filmstrip.has_thumbnail(first))
+        self.assertTrue(panel.filmstrip.has_thumbnail(second))
 
     def test_evicted_thumbnail_can_be_requested_again(self) -> None:
         panel = self._panel(3)

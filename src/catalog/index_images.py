@@ -25,6 +25,18 @@ def index_image_path(catalog: Path, photo_id: int) -> Path:
     return preview_directory(catalog) / f"{photo_id}.jpg"
 
 
+class IndexPaths:
+    def __init__(self, catalog: Path) -> None:
+        self._directory = preview_directory(catalog)
+        self._known: dict[int, Path] = {}
+
+    def of(self, photo_id: int) -> Path:
+        path = self._known.get(photo_id)
+        if path is None:
+            path = self._known[photo_id] = self._directory / f"{photo_id}.jpg"
+        return path
+
+
 def delete_index_image(catalog: Path, photo_id: int) -> None:
     _require_photo_id(photo_id)
     path = index_image_path(catalog, photo_id)

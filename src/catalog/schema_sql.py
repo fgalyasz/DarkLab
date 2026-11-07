@@ -13,6 +13,7 @@ ADD_SETTINGS = "ALTER TABLE photos ADD COLUMN develop_settings TEXT"
 ADD_RATING = "ALTER TABLE photos ADD COLUMN rating TEXT"
 ADD_PICK = "ALTER TABLE photos ADD COLUMN pick TEXT"
 ADD_COLOR = "ALTER TABLE photos ADD COLUMN color TEXT"
+ADD_CAPTURE = "ALTER TABLE photos ADD COLUMN capture_time REAL"
 FOLDERS_TABLE = (
     "CREATE TABLE IF NOT EXISTS folders "
     "(id INTEGER PRIMARY KEY, folder_path TEXT NOT NULL UNIQUE)"
@@ -26,6 +27,7 @@ PHOTO_COLUMN_STATEMENTS = {
     "rating": ADD_RATING,
     "pick": ADD_PICK,
     "color": ADD_COLOR,
+    "capture_time": ADD_CAPTURE,
 }
 
 CATALOG_INDEXES = {

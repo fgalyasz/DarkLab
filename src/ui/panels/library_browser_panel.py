@@ -13,12 +13,11 @@ from PyQt6.QtWidgets import (
 
 from src.config.config_manager import ConfigManager
 from src.catalog.catalog_folders import catalog_folders, folder_photo_ids, relink_folder
-from src.catalog.cull_filter import filter_by_marks
-from src.catalog.index_images import index_image_path
-from src.catalog.photo_pages import list_catalog_indexes
-from src.catalog.marks import read_marks, write_mark
-from src.catalog.missing import RelinkError, missing_index_paths
-from src.catalog.photo_order import CAPTURE, IMPORTED, NAME, RATING, SortKeys, read_sort_keys, sort_indexes
+from src.catalog.index_images import IndexPaths
+from src.catalog.library_query import MarkFilter, query_photo_ids
+from src.catalog.marks import read_marked, write_mark
+from src.catalog.library_query import CAPTURE, IMPORTED, NAME, RATING
+from src.catalog.missing import RelinkError, missing_photo_ids
 from src.catalog.removal import photo_id_of_index, remove_indexes
 from src.exporting.batch import export_photos
 from src.imaging.lru_cache import LruCache
@@ -78,9 +77,11 @@ class LibraryBrowserPanel(BasePanel):
     def __init__(self) -> None:
         self._config = ConfigManager()
         self._catalog: Path | None = None
-        self._images: list[Path] = []
+        self._paths: IndexPaths | None = None
+        self._scope: frozenset[int] | None = None
+        self._missing: set[Path] = set()
+        self._checked: set[Path] = set()
         self._folder: Path | None = None
-        self._sort_keys = SortKeys()
         self._selected: list[Path] = []
         self._thumbs: LruCache[Path, QPixmap] = LruCache(THUMB_CACHE_LIMIT)
         self._requested: set[Path] = set()
@@ -243,6 +244,7 @@ class LibraryBrowserPanel(BasePanel):
         self.grid = GridImageWidget()
         self.grid.selection_changed.connect(self._on_grid_selection)
         self.grid.thumbnails_needed.connect(self._request_thumbs)
+        self.grid.paths_visible.connect(self._check_missing)
         self.grid.marker_changed.connect(self._on_marker_changed)
         return self.grid
 
@@ -372,10 +374,9 @@ class LibraryBrowserPanel(BasePanel):
         self._load_all_photographs()
 
     def _catalog_markers(self) -> dict[Path, dict[str, str]]:
-        if self._catalog is None:
+        if self._catalog is None or self._paths is None:
             return {}
-        catalog = self._catalog
-        return {index_image_path(catalog, photo_id): marks for photo_id, marks in read_marks(catalog).items()}
+        return {self._paths.of(photo_id): marks for photo_id, marks in read_marked(self._catalog).items()}
 
     def _load_markers(self) -> None:
         if hasattr(self, "grid"):
@@ -393,7 +394,7 @@ class LibraryBrowserPanel(BasePanel):
     def _load_all_photographs(self) -> None:
         self._cancel_load()
         self._refresh_folders()
-        self._show_paths(self._catalog_indexes())
+        self._show_scope()
 
     def _refresh_folders(self) -> None:
         folders = [] if self._catalog is None else catalog_folders(self._catalog)
@@ -401,19 +402,23 @@ class LibraryBrowserPanel(BasePanel):
             self._folder = None
         self.folders.set_folders(folders, self._folder)
 
-    def _catalog_indexes(self) -> list[Path]:
-        if self._catalog is None:
-            return []
-        indexes = list_catalog_indexes(self._catalog)
-        if self._folder is None:
-            return indexes
-        wanted = set(folder_photo_ids(self._catalog, self._folder))
-        return [path for path in indexes if photo_id_of_index(path) in wanted]
+    def _folder_scope(self) -> frozenset[int] | None:
+        if self._catalog is None or self._folder is None:
+            return None
+        return frozenset(folder_photo_ids(self._catalog, self._folder))
 
-    def _missing_indexes(self) -> set[Path]:
+    def _check_missing(self, paths: list) -> None:
         if self._catalog is None:
-            return set()
-        return missing_index_paths(self._catalog)
+            return
+        fresh = [Path(path) for path in paths if Path(path) not in self._checked]
+        if not fresh:
+            return
+        self._checked.update(fresh)
+        ids = [photo_id for photo_id in map(photo_id_of_index, fresh) if photo_id is not None]
+        gone = missing_photo_ids(self._catalog, ids)
+        if gone:
+            self._missing.update(path for path in fresh if photo_id_of_index(path) in gone)
+            self.grid.set_missing_images(self._missing)
 
     def _load_previous_import(self) -> None:
         self._load_all_photographs()
@@ -440,9 +445,9 @@ class LibraryBrowserPanel(BasePanel):
         self._load_all_photographs()
         return True
 
-    def _show_paths(self, paths: list[Path]) -> None:
-        self._images = list(paths)
-        self._sort_keys = SortKeys() if self._catalog is None else read_sort_keys(self._catalog)
+    def _show_scope(self) -> None:
+        self._paths = None if self._catalog is None else IndexPaths(self._catalog)
+        self._scope = self._folder_scope()
         self._load_markers()
         self._selected = []
         self._clear_selection_panels()
@@ -453,23 +458,27 @@ class LibraryBrowserPanel(BasePanel):
         if not hasattr(self, "grid"):
             return
         visible = self._visible_images()
+        self._missing.clear()
+        self._checked.clear()
         self.grid.set_images(visible)
-        self.grid.set_missing_images(self._missing_indexes())
+        self.grid.set_missing_images(set())
         self.filmstrip.set_photos(visible)
         self._restore_thumbs(visible)
         self._apply_grid()
         self._update_status()
 
     def _visible_images(self) -> list[Path]:
-        named = filter_paths(self._images, self.filter_edit.text())
-        marked = filter_by_marks(
-            named,
-            self.grid.image_markers,
+        if self._catalog is None or self._paths is None:
+            return []
+        ids = query_photo_ids(self._catalog, self._mark_filter(), str(self.sort_combo.currentData()), self._scope)
+        return filter_paths([self._paths.of(photo_id) for photo_id in ids], self.filter_edit.text())
+
+    def _mark_filter(self) -> MarkFilter:
+        return MarkFilter(
             str(self.rating_combo.currentData()),
             str(self.pick_combo.currentData()),
             str(self.color_combo.currentData()),
         )
-        return sort_indexes(marked, str(self.sort_combo.currentData()), self._sort_keys, self.grid.image_markers)
 
     def _restore_thumbs(self, paths: list[Path]) -> None:
         shown = set(paths)

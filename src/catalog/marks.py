@@ -12,6 +12,11 @@ COLORS = ("none", "red", "orange", "yellow", "green", "blue", "purple")
 ALLOWED = {"rating": RATINGS, "pick": PICKS, "color": COLORS}
 DEFAULTS = {"rating": "0", "pick": "none", "color": "none"}
 READ_ALL = "SELECT id, rating, pick, color FROM photos"
+READ_MARKED = (
+    "SELECT id, rating, pick, color FROM photos WHERE "
+    "(rating IS NOT NULL AND rating != '0') OR (pick IS NOT NULL AND pick != 'none') "
+    "OR (color IS NOT NULL AND color != 'none')"
+)
 READ_ONE = "SELECT id, rating, pick, color FROM photos WHERE id = ?"
 WRITE_COLUMN = "UPDATE photos SET {column} = ? WHERE id = ?"
 
@@ -28,6 +33,10 @@ def write_mark(catalog: Path, photo_id: int, kind: str, value: str) -> None:
 
 def read_marks(catalog: Path) -> dict[int, dict[str, str]]:
     return {int(row[0]): _marks_of(row) for row in _rows(catalog, READ_ALL, ())}
+
+
+def read_marked(catalog: Path) -> dict[int, dict[str, str]]:
+    return {int(row[0]): _marks_of(row) for row in _rows(catalog, READ_MARKED, ())}
 
 
 def read_photo_marks(catalog: Path, photo_id: int) -> dict[str, str]:

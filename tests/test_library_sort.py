@@ -12,15 +12,12 @@ from PyQt6.QtWidgets import QApplication
 from src.catalog.database import create_catalog
 from src.catalog.file_hash import content_hash
 from src.catalog.marks import write_mark
-from src.catalog.photo_order import (
-    CAPTURE, IMPORTED, NAME, RATING, SortKeys, capture_time, read_sort_keys, sort_indexes,
-)
+from src.catalog.capture_time import capture_time
+from src.catalog.library_query import IMPORTED, NAME, RATING
 from src.importing.originals import import_originals
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
 
 APP = QApplication.instance() or QApplication([])
-ONE, TWO, THREE = Path("1.jpg"), Path("2.jpg"), Path("3.jpg")
-INDEXES = [ONE, TWO, THREE]
 
 
 def _original(folder: Path, name: str, shade: int, captured: str | None) -> Path:
@@ -35,39 +32,6 @@ def _original(folder: Path, name: str, shade: int, captured: str | None) -> Path
 
 def _ids(paths: list[Path]) -> list[int]:
     return [int(path.stem) for path in paths]
-
-
-class SortIndexesTests(unittest.TestCase):
-    KEYS = SortKeys(
-        names={1: "b.jpg", 2: "a.jpg", 3: "c.jpg"},
-        captures={1: 300.0, 2: None, 3: 100.0},
-    )
-    MARKERS = {ONE: {"rating": "2"}, TWO: {"rating": "5"}, THREE: {"rating": "x"}}
-
-    def _sorted(self, mode: str) -> list[int]:
-        return _ids(sort_indexes([THREE, ONE, TWO], mode, self.KEYS, self.MARKERS))
-
-    def test_capture_time_is_oldest_first_and_unknown_last(self) -> None:
-        self.assertEqual(self._sorted(CAPTURE), [3, 1, 2])
-
-    def test_file_name_uses_the_original_name(self) -> None:
-        self.assertEqual(self._sorted(NAME), [2, 1, 3])
-
-    def test_import_time_follows_photo_ids(self) -> None:
-        self.assertEqual(self._sorted(IMPORTED), [1, 2, 3])
-
-    def test_rating_is_best_first_and_ties_keep_import_order(self) -> None:
-        self.assertEqual(self._sorted(RATING), [2, 1, 3])
-        tied = sort_indexes([THREE, TWO, ONE], RATING, self.KEYS, {})
-        self.assertEqual(_ids(tied), [1, 2, 3])
-
-    def test_unknown_mode_is_rejected(self) -> None:
-        with self.assertRaises(ValueError):
-            sort_indexes(INDEXES, "size", self.KEYS, {})
-
-    def test_unknown_photo_ids_do_not_break_the_sort(self) -> None:
-        stranger = Path("other.jpg")
-        self.assertEqual(sort_indexes([stranger, ONE], NAME, self.KEYS, {})[0], stranger)
 
 
 class CaptureTimeTests(unittest.TestCase):
@@ -89,7 +53,7 @@ class CaptureTimeTests(unittest.TestCase):
 
     def test_unreadable_original_uses_the_file_date(self) -> None:
         plain = _original(self.folder, "plain.jpg", 10, "2001:01:01 00:00:00")
-        with patch("src.catalog.photo_order.exifread.process_file", side_effect=OSError("denied")):
+        with patch("src.catalog.capture_time.exifread.process_file", side_effect=OSError("denied")):
             self.assertEqual(capture_time(plain), plain.stat().st_mtime)
 
     def test_missing_original_has_no_capture_time(self) -> None:
@@ -140,15 +104,6 @@ class LibrarySortPanelTests(unittest.TestCase):
         before = content_hash(self.originals[0])
         self._choose(RATING)
         self.assertEqual(content_hash(self.originals[0]), before)
-
-    def test_read_sort_keys_lists_names_and_captures(self) -> None:
-        keys = read_sort_keys(self.catalog)
-        self.assertEqual(keys.names, {1: "b.jpg", 2: "c.jpg", 3: "a.jpg"})
-        self.assertEqual(set(keys.captures), {1, 2, 3})
-
-    def test_no_catalog_has_no_keys(self) -> None:
-        self.panel.show_catalog(None)
-        self.assertEqual(self.panel._sort_keys, SortKeys())
 
 
 if __name__ == "__main__":

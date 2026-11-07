@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,7 @@ from src.catalog.missing import RelinkError
 logger = logging.getLogger(__name__)
 
 PHOTO_ORIGINALS = "SELECT id, original_path, content_hash FROM photos ORDER BY id"
+PHOTO_PATHS = "SELECT id, original_path FROM photos ORDER BY id"
 WRITE_PATH = "UPDATE photos SET original_path = ?, content_hash = ? WHERE id = ?"
 
 
@@ -30,14 +32,15 @@ class _StoredPhoto:
 
 
 def catalog_folders(catalog: Path) -> list[CatalogFolder]:
-    grouped: dict[Path, list[int]] = {}
-    for photo in _stored_photos(catalog):
-        grouped.setdefault(photo.original.parent, []).append(photo.photo_id)
-    return [_folder(path, grouped[path]) for path in sorted(grouped, key=str)]
+    grouped: dict[str, list[int]] = {}
+    for photo_id, original in _stored_rows(catalog):
+        grouped.setdefault(os.path.dirname(original), []).append(photo_id)
+    return [_folder(Path(directory), grouped[directory]) for directory in sorted(grouped)]
 
 
 def folder_photo_ids(catalog: Path, folder: Path) -> tuple[int, ...]:
-    return tuple(photo.photo_id for photo in _stored_photos(catalog) if photo.original.parent == folder)
+    directory = str(folder)
+    return tuple(photo_id for photo_id, original in _stored_rows(catalog) if os.path.dirname(original) == directory)
 
 
 def relink_folder(catalog: Path, folder: Path, replacement: Path, confirm_different: bool = False) -> int:
@@ -57,12 +60,19 @@ def _folder(path: Path, photo_ids: list[int]) -> CatalogFolder:
 
 
 def _stored_photos(catalog: Path) -> list[_StoredPhoto]:
+    return [_StoredPhoto(int(row[0]), Path(str(row[1])), _digest(row[2])) for row in _rows(catalog, PHOTO_ORIGINALS)]
+
+
+def _stored_rows(catalog: Path) -> list[tuple[int, str]]:
+    return [(int(row[0]), str(row[1])) for row in _rows(catalog, PHOTO_PATHS)]
+
+
+def _rows(catalog: Path, query: str) -> list[tuple[object, ...]]:
     connection = sqlite3.connect(database_file(catalog))
     try:
-        rows = connection.execute(PHOTO_ORIGINALS).fetchall()
+        return connection.execute(query).fetchall()
     finally:
         connection.close()
-    return [_StoredPhoto(int(row[0]), Path(str(row[1])), _digest(row[2])) for row in rows]
 
 
 def _digest(value: object) -> str | None:

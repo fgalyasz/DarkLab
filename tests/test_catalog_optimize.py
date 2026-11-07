@@ -89,7 +89,7 @@ class OptimizeCatalogTests(OptimizeFixture):
         calls: list[tuple[int, int, str]] = []
         optimize_catalog(self.catalog, lambda done, total, label: calls.append((done, total, label)))
         self.assertEqual([call[2] for call in calls[:-1]], list(STEP_LABELS))
-        self.assertEqual([call[0] for call in calls], [0, 1, 2, 3, 4, 5])
+        self.assertEqual([call[0] for call in calls], list(range(len(STEP_LABELS) + 1)))
         self.assertEqual(calls[-1][:2], (len(STEP_LABELS), len(STEP_LABELS)))
 
 
@@ -129,7 +129,7 @@ class ProgressReporterTests(unittest.TestCase):
     def test_reporter_shows_label_and_value(self) -> None:
         parent = QWidget()
         reporter = ProgressReporter(parent, "Optimize Catalog")
-        reporter(2, 5, "Creating indexes")
+        reporter(2, len(STEP_LABELS), "Creating indexes")
         self.assertEqual(reporter.text, "Creating indexes")
         self.assertEqual(reporter.value, 2)
         reporter.close()
