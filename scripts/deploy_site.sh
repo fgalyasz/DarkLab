@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT="darklab"
+SITE_HOST="darklab-a4o.pages.dev"
 PACKAGE_NAME="DarkLab"
 GATEWAY="${ROOT}/.gateway-site"
 version="$(tr -d ' \t\n\r' < "${ROOT}/docs/version.txt")"
@@ -32,4 +33,4 @@ cat > "${GATEWAY}/index.html" <<EOF
 </html>
 EOF
 npx --yes wrangler pages deploy "${GATEWAY}" --project-name "${PROJECT}"
-echo "OK: https://${PROJECT}.pages.dev version ${version}"
+echo "OK: https://${SITE_HOST} version ${version}"
