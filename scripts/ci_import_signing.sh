@@ -20,15 +20,17 @@ security unlock-keychain -p "${CODESIGN_KEYCHAIN_PASSWORD}" "${keychain}"
 security import "${p12}" \
   -k "${keychain}" \
   -P "${CODESIGN_P12_PASSWORD}" \
+  -A \
   -T /usr/bin/codesign \
   -T /usr/bin/security
+security list-keychains -d user -s "${keychain}" "${HOME}/Library/Keychains/login.keychain-db"
 security set-key-partition-list \
   -S apple-tool:,apple:,codesign: \
   -s \
   -k "${CODESIGN_KEYCHAIN_PASSWORD}" \
-  "${keychain}" >/dev/null
-security list-keychains -d user -s "${keychain}" "${HOME}/Library/Keychains/login.keychain-db"
+  "${keychain}" >/dev/null || true
 rm -f "${p12}"
+security find-identity -v -p codesigning "${keychain}"
 security find-identity -v -p codesigning "${keychain}" | grep -F "\"${identity_name}\"" >/dev/null
 
 if [[ -n "${sparkle_dir}" && -n "${SPARKLE_EDDSA_PRIVATE_KEY:-}" ]]; then
