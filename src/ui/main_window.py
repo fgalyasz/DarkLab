@@ -16,6 +16,7 @@ from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.integrity import CatalogIntegrityError, check_integrity, require_healthy
 from src.catalog.optimize import CatalogOptimizeError, optimize_catalog
+from src.catalog.optimize_policy import read_optimize_policy, store_optimize_policy
 from src.catalog.preview_maintenance import maintain_preview_cache
 from src.catalog.preview_policy import read_preview_policy, store_preview_policy
 from src.importing.previews import rebuild_previews
@@ -33,7 +34,9 @@ from src.ui.catalog_filter import CATALOG_FILTER
 from src.ui.progress_reporter import ProgressReporter
 from src.ui.dialogs import ImportDialog
 from src.ui.dialogs.catalog_settings_dialog import CatalogSettingsDialog
+from src.ui.dialogs.optimize_automation_dialog import OptimizeAutomationDialog
 from src.ui.dialogs.preview_cache_dialog import PreviewCacheDialog
+from src.ui.optimize_on_quit import optimize_on_quit
 from src.ui.dialogs.select_catalog_dialog import SelectCatalogDialog
 from src.ui.widgets.module_bar import ModuleBar
 
@@ -211,6 +214,8 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._edit_catalog_settings)
         preview_policy_action = file_menu.addAction("Preview Cache &Settings...")
         preview_policy_action.triggered.connect(self._edit_preview_cache_settings)
+        optimize_auto_action = file_menu.addAction("Optimize &Automation...")
+        optimize_auto_action.triggered.connect(self._edit_optimize_automation)
         backup_action = file_menu.addAction("&Back Up Catalog")
         backup_action.triggered.connect(self._back_up_catalog)
         check_action = file_menu.addAction("Check Catalog &Integrity")
@@ -320,6 +325,14 @@ class MainWindow(QMainWindow):
             return
         store_preview_policy(self.catalog_path, dialog.chosen_policy())
 
+    def _edit_optimize_automation(self) -> None:
+        if self.catalog_path is None:
+            return
+        dialog = OptimizeAutomationDialog(read_optimize_policy(self.catalog_path), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        store_optimize_policy(self.catalog_path, dialog.chosen_policy())
+
     def launch_window(self) -> bool:
         chosen = require_catalog(self._catalog_settings(), SelectCatalogDialog.pick)
         if chosen is None:
@@ -401,14 +414,11 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event) -> None:
         """Handle window close event"""
-        # Save final state
         if not self.isMaximized():
             self.config_manager.set_window_geometry(self.geometry())
-        
         self.config_manager.set("window.maximized", self.isMaximized())
-        
-        # Stop auto-save timer
         self._auto_save_timer.stop()
-        
+        if self.catalog_path is not None:
+            optimize_on_quit(self, self.catalog_path, read_optimize_policy(self.catalog_path))
         self.logger.info("Application closed")
         event.accept()

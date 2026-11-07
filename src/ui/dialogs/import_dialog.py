@@ -32,6 +32,7 @@ from src.config.config_manager import ConfigManager
 from src.ui.import_summary import byte_total, import_status_text
 from src.importing.discover import discover_images
 from src.importing.originals import import_originals, is_duplicate
+from src.ui.optimize_on_quit import set_import_copy_active
 from src.importing.transfer import copy_original, move_original
 from src.ui.themes import StyleSheet
 from src.ui.widgets.collapsible_section import CollapsibleSection
@@ -2256,6 +2257,7 @@ class ImportDialog(QDialog):
             return
 
         self.is_importing = True
+        set_import_copy_active(True)
         self.import_cancel_requested = False
         self.import_button.setEnabled(False)
 
@@ -2328,6 +2330,7 @@ class ImportDialog(QDialog):
 
         finally:
             self.is_importing = False
+            set_import_copy_active(False)
             self.import_cancel_requested = False
             self._sync_import_button()
 

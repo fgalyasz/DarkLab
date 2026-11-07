@@ -66,28 +66,45 @@ class _Progress:
             self._callback(self._done, len(STEP_LABELS), label)
 
 
-def optimize_catalog(catalog: Path, progress: ProgressCallback | None = None) -> OptimizeReport:
+def optimize_catalog(
+    catalog: Path,
+    progress: ProgressCallback | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> OptimizeReport:
     try:
-        return _CatalogOptimizer(catalog, _Progress(progress)).run()
+        return _CatalogOptimizer(catalog, _Progress(progress), should_cancel).run()
     except (sqlite3.Error, CatalogIntegrityError) as error:
         logger.error("Optimize of %s failed: %s", catalog, error)
         raise CatalogOptimizeError(f"Optimize of {catalog} failed: {error}") from error
 
 
 class _CatalogOptimizer:
-    def __init__(self, catalog: Path, progress: _Progress) -> None:
+    def __init__(
+        self,
+        catalog: Path,
+        progress: _Progress,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> None:
         self._catalog = catalog
         self._database = database_file(catalog)
         self._progress = progress
+        self._should_cancel = should_cancel
         self._created: tuple[str, ...] = ()
 
     def run(self) -> OptimizeReport:
         before = self._database.stat().st_size
         for step in self._steps():
+            if self._cancelled():
+                raise CatalogOptimizeError(f"Optimize of {self._catalog} was cancelled.")
             self._progress.advance()
             step()
+            if self._cancelled():
+                raise CatalogOptimizeError(f"Optimize of {self._catalog} was cancelled.")
         self._progress.finish()
         return OptimizeReport(self._created, before, self._database.stat().st_size)
+
+    def _cancelled(self) -> bool:
+        return self._should_cancel is not None and self._should_cancel()
 
     def _steps(self) -> tuple[Callable[[], None], ...]:
         return (self._check, self._index, self._capture, self._analyze, self._vacuum, self._verify)

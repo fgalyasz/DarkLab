@@ -28,3 +28,17 @@ class ProgressReporter:
 
     def close(self) -> None:
         self._dialog.close()
+
+
+class CancellableProgressReporter(ProgressReporter):
+    def __init__(self, parent: QWidget, title: str) -> None:
+        super().__init__(parent, title)
+        self._dialog.setCancelButtonText("Cancel")
+
+    def cancelled(self) -> bool:
+        return self._dialog.wasCanceled()
+
+    def __call__(self, done: int, total: int, label: str) -> None:
+        super().__call__(done, total, label)
+        if self.cancelled():
+            return
