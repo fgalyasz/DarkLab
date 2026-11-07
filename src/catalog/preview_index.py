@@ -4,18 +4,12 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from src.catalog.index_images import index_image_path, list_index_images
+from src.catalog.index_images import index_image_path
 from src.catalog.locations import database_file
 
 logger = logging.getLogger(__name__)
 
 ALL_PHOTO_IDS = "SELECT id FROM photos ORDER BY id"
-
-
-def list_photo_indexes(catalog: Path) -> list[Path]:
-    ids = set(_catalog_photo_ids(catalog))
-    ids.update(int(path.stem) for path in list_index_images(catalog))
-    return [index_image_path(catalog, photo_id) for photo_id in sorted(ids)]
 
 
 def missing_preview_ids(catalog: Path) -> list[int]:

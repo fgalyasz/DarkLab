@@ -5,6 +5,7 @@ from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import QListView
 
 CELL_SIZE = QSize(110, 88)
+NEARBY_CELLS = 8
 
 
 class FilmstripModel(QAbstractListModel):
@@ -36,6 +37,9 @@ class FilmstripModel(QAbstractListModel):
         self._icons = {}
         self.endResetModel()
 
+    def path_at(self, row: int) -> Path:
+        return self._paths[row]
+
     def row_of(self, path: Path) -> int | None:
         if self._rows is None:
             self._rows = {known: row for row, known in enumerate(self._paths)}
@@ -59,6 +63,7 @@ class FilmstripModel(QAbstractListModel):
 
 class FilmstripWidget(QListView):
     photo_selected = pyqtSignal(str)
+    thumbnails_needed = pyqtSignal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -77,6 +82,7 @@ class FilmstripWidget(QListView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.selectionModel().currentChanged.connect(self._emit_current)
+        self.horizontalScrollBar().valueChanged.connect(self.request_nearby_thumbnails)
 
     def count(self) -> int:
         return self._model.rowCount()
@@ -97,6 +103,21 @@ class FilmstripWidget(QListView):
         row = self._model.row_of(path)
         if row is not None:
             self.setCurrentIndex(self._model.index(row))
+
+    def nearby_rows(self) -> range:
+        offset = self.horizontalScrollBar().value()
+        first = offset // CELL_SIZE.width()
+        last = (offset + self.viewport().width()) // CELL_SIZE.width()
+        return range(max(0, first - NEARBY_CELLS), min(self.count(), last + NEARBY_CELLS + 1))
+
+    def request_nearby_thumbnails(self) -> None:
+        wanted = [self._model.path_at(row) for row in self.nearby_rows()]
+        if wanted:
+            self.thumbnails_needed.emit(wanted)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.request_nearby_thumbnails()
 
     def _emit_current(self, current: QModelIndex, _previous: QModelIndex) -> None:
         if current.isValid():

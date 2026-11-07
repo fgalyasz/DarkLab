@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import QApplication
 from src.catalog.database import create_catalog
 from src.catalog.index_images import index_image_path, list_index_images
 from src.catalog.locations import database_file, preview_directory
-from src.catalog.preview_index import list_photo_indexes, missing_preview_ids
+from src.catalog.photo_pages import list_catalog_indexes
+from src.catalog.preview_index import missing_preview_ids
 from src.importing.originals import import_originals
 from src.importing.previews import RebuildReport, rebuild_previews
 from src.ui.panels.library_browser_panel import LibraryBrowserPanel
@@ -53,29 +54,23 @@ class PreviewIndexTests(PreviewFixture):
         expected = [index_image_path(self.catalog, 1), index_image_path(self.catalog, 2)]
         self.wipe_previews()
         self.assertEqual(list_index_images(self.catalog), [])
-        self.assertEqual(list_photo_indexes(self.catalog), expected)
+        self.assertEqual(list_catalog_indexes(self.catalog), expected)
 
     def test_missing_preview_ids_name_only_the_absent_files(self) -> None:
         self.assertEqual(missing_preview_ids(self.catalog), [])
         index_image_path(self.catalog, 2).unlink()
         self.assertEqual(missing_preview_ids(self.catalog), [2])
 
-    def test_preview_without_a_database_row_is_still_listed(self) -> None:
-        extra = index_image_path(self.catalog, 9)
-        extra.write_bytes(b"x")
-        self.assertIn(extra, list_photo_indexes(self.catalog))
-
-    def test_folder_without_a_database_lists_only_files(self) -> None:
+    def test_folder_without_a_database_has_no_photos(self) -> None:
         bare = self.root / "bare"
         bare.mkdir()
-        self.assertEqual(list_photo_indexes(bare), [])
+        self.assertEqual(list_catalog_indexes(bare), [])
         self.assertEqual(missing_preview_ids(bare), [])
         self.assertFalse(database_file(bare).exists())
 
     def test_unreadable_database_lists_nothing_from_rows(self) -> None:
         database_file(self.catalog).write_bytes(b"torn" * 500)
         self.assertEqual(missing_preview_ids(self.catalog), [])
-        self.assertEqual(len(list_photo_indexes(self.catalog)), 2)
 
 
 class RebuildPreviewsTests(PreviewFixture):

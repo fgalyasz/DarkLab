@@ -15,7 +15,7 @@ from src.ui.develop_sections import (
     color_mixer_panel, crop_panel, detail_panel, effects_panel, history_list, lens_panel, presets_panel,
     tone_curve_panel, transform_panel,
 )
-from src.catalog.preview_index import list_photo_indexes
+from src.catalog.photo_pages import list_catalog_indexes
 from src.catalog.marks import read_photo_marks
 from src.catalog.removal import photo_id_of_index
 from src.develop.crop_settings import CropSettings, decode_crop
@@ -24,6 +24,7 @@ from src.develop.mark_text import marks_text
 from src.develop.crop_store import load_crop, save_crop
 from src.develop.tone_settings import TONE_KEYS, decode_tone
 from src.develop.tone_store import load_tone, save_tone
+from src.imaging.lru_cache import LruCache
 from src.ui.dialogs.import_dialog import ImageProcessorRunnable
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
@@ -38,6 +39,7 @@ from src.ui.widgets.histogram_widget import HistogramWidget
 
 logger = logging.getLogger(__name__)
 SAVE_DELAY_MS = 400
+THUMB_CACHE_LIMIT = 400
 PREVIEW_KEYS = ("Exposure", "Contrast", "Temp", "Tint", "Vibrance", "Saturation")
 
 
@@ -62,6 +64,8 @@ class DevelopPanel(BasePanel):
         self._histories: dict[int, DevelopHistory] = {}
         self._save_timer = _save_timer()
         self._source_image = QImage()
+        self._thumbs: LruCache[Path, QPixmap] = LruCache(THUMB_CACHE_LIMIT)
+        self._requested: set[Path] = set()
         self._session = 0
         self._relays: list[ThumbRelay] = []
         self._pool = QThreadPool()
@@ -188,6 +192,7 @@ class DevelopPanel(BasePanel):
     def _build_filmstrip(self) -> FilmstripWidget:
         self.filmstrip = FilmstripWidget()
         self.filmstrip.photo_selected.connect(self._on_filmstrip)
+        self.filmstrip.thumbnails_needed.connect(self._request_thumbs)
         return self.filmstrip
 
     def _bind_preview_sliders(self) -> None:
@@ -293,26 +298,32 @@ class DevelopPanel(BasePanel):
     def _catalog_indexes(self) -> list[Path]:
         if self._catalog is None:
             return []
-        return list_photo_indexes(self._catalog)
+        return list_catalog_indexes(self._catalog)
 
     def _show_paths(self, paths: list[Path]) -> None:
         self._photos = list(paths)
+        self._reset_thumbs()
         self.filmstrip.set_photos(self._photos)
-        self._start_thumbs()
         photo = _first_visible(self._photos)
         if photo is not None:
             self.filmstrip.select_photo(photo)
+        self.filmstrip.request_nearby_thumbnails()
 
-    def _start_thumbs(self) -> None:
+    def _reset_thumbs(self) -> None:
         self._session += 1
-        session = self._session
         self._relays.clear()
-        for index, path in enumerate(self._photos):
-            self._queue_thumb(path, index, session)
+        self._thumbs.clear()
+        self._requested.clear()
 
-    def _queue_thumb(self, path: Path, index: int, session: int) -> None:
+    def _request_thumbs(self, paths: list) -> None:
+        for path in paths:
+            if path not in self._requested:
+                self._requested.add(path)
+                self._queue_thumb(path, self._session)
+
+    def _queue_thumb(self, path: Path, session: int) -> None:
         relay = ThumbRelay(self, session)
-        runnable = ImageProcessorRunnable([str(path)], index, 360)
+        runnable = ImageProcessorRunnable([str(path)], len(self._relays), 360)
         runnable.signals.image_found.connect(relay.receive)
         self._relays.append(relay)
         self._pool.start(runnable)
@@ -321,9 +332,15 @@ class DevelopPanel(BasePanel):
         if session != self._session or image.isNull():
             return
         photo = Path(path)
-        self.filmstrip.set_thumbnail(photo, QPixmap.fromImage(image))
+        self._cache_thumb(photo, QPixmap.fromImage(image))
         if self._current == photo:
             self._set_source(image)
+
+    def _cache_thumb(self, photo: Path, pixmap: QPixmap) -> None:
+        for evicted in self._thumbs.put(photo, pixmap):
+            self._requested.discard(evicted)
+            self.filmstrip.clear_thumbnail(evicted)
+        self.filmstrip.set_thumbnail(photo, pixmap)
 
     def _on_filmstrip(self, path: str) -> None:
         self._show_photo(Path(path))
