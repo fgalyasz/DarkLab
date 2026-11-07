@@ -9,6 +9,7 @@ import rawpy
 from src.catalog.index_images import write_index_image
 from src.catalog.photos import photo_original
 from src.catalog.preview_index import missing_preview_ids
+from src.catalog.preview_policy import read_preview_policy
 from src.importing.originals import index_jpeg
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ def _rebuild_one(catalog: Path, photo_id: int) -> bool:
         logger.debug("Preview of photo %s stays missing: original %s not found", photo_id, original)
         return False
     try:
-        write_index_image(catalog, photo_id, index_jpeg(original))
+        policy = read_preview_policy(catalog)
+        write_index_image(catalog, photo_id, index_jpeg(original, policy))
     except (OSError, ValueError, rawpy.LibRawError) as error:
         logger.error("Could not rebuild preview of photo %s from %s: %s", photo_id, original, error)
         return False

@@ -16,7 +16,8 @@ from src.catalog.locations import database_file
 from src.catalog.photos import stored_hash
 from src.catalog.folders import imported_folders
 from src.catalog.index_images import list_index_images, read_index_image
-from src.importing.originals import _raw_thumb_bytes, import_originals, is_duplicate
+from src.importing.originals import import_originals, is_duplicate
+from src.importing.preview_encoding import _raw_thumb_bytes
 
 
 def _thumb(fmt: rawpy.ThumbFormat, data: object) -> MagicMock:

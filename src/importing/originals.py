@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import io
 import logging
 from pathlib import Path
 
 import rawpy
-from PIL import Image, UnidentifiedImageError
 
 from src.catalog.database import apply_schema
 from src.catalog.develop_settings import write_develop_settings
@@ -14,10 +12,13 @@ from src.catalog.folders import add_imported_folder
 from src.catalog.index_images import write_index_image
 from src.catalog.locations import database_file
 from src.catalog.photos import add_photo, fill_missing_hashes, known_content
+from src.catalog.preview_policy import PreviewPolicy, read_preview_policy
 from src.catalog.sidecar import read_sidecar
+from src.importing.preview_encoding import encode_standard_jpeg
 
 logger = logging.getLogger(__name__)
 INDEX_EDGE = 360
+_DEFAULT_POLICY = PreviewPolicy(INDEX_EDGE, 80, 2048, 85, False, 7)
 
 
 def is_duplicate(catalog: Path, original: Path) -> bool:
@@ -42,7 +43,8 @@ def import_original(catalog: Path, original: Path, allow_duplicate: bool = False
         return None
     add_imported_folder(catalog, original.parent)
     _restore_sidecar_settings(catalog, photo_id, original)
-    return write_index_image(catalog, photo_id, index_jpeg(original))
+    policy = read_preview_policy(catalog)
+    return write_index_image(catalog, photo_id, index_jpeg(original, policy))
 
 
 def _restore_sidecar_settings(catalog: Path, photo_id: int, original: Path) -> None:
@@ -51,10 +53,9 @@ def _restore_sidecar_settings(catalog: Path, photo_id: int, original: Path) -> N
         write_develop_settings(catalog, photo_id, settings)
 
 
-def index_jpeg(original: Path) -> bytes:
-    image = _opened_image(original)
-    image.thumbnail((INDEX_EDGE, INDEX_EDGE))
-    return _jpeg_bytes(image.convert("RGB"))
+def index_jpeg(original: Path, policy: PreviewPolicy | None = None) -> bytes:
+    chosen = _DEFAULT_POLICY if policy is None else policy
+    return encode_standard_jpeg(original, chosen.standard_long_edge, chosen.standard_quality)
 
 
 def _import_one(catalog: Path, original: Path, allow_duplicate: bool) -> int:
@@ -68,27 +69,3 @@ def _import_one(catalog: Path, original: Path, allow_duplicate: bool) -> int:
     return 1
 
 
-def _opened_image(original: Path) -> Image.Image:
-    try:
-        return Image.open(original)
-    except UnidentifiedImageError:
-        return _raw_preview(original)
-
-
-def _raw_preview(original: Path) -> Image.Image:
-    return Image.open(io.BytesIO(_raw_thumb_bytes(original)))
-
-
-def _raw_thumb_bytes(original: Path) -> bytes:
-    with rawpy.imread(str(original)) as raw:
-        thumb = raw.extract_thumb()
-    if thumb.format == rawpy.ThumbFormat.JPEG:
-        return bytes(thumb.data)
-    image = Image.fromarray(thumb.data)
-    return _jpeg_bytes(image.convert("RGB"))
-
-
-def _jpeg_bytes(image: Image.Image) -> bytes:
-    buffer = io.BytesIO()
-    image.save(buffer, format="JPEG", quality=80)
-    return buffer.getvalue()

@@ -16,6 +16,8 @@ from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.integrity import CatalogIntegrityError, check_integrity, require_healthy
 from src.catalog.optimize import CatalogOptimizeError, optimize_catalog
+from src.catalog.preview_maintenance import maintain_preview_cache
+from src.catalog.preview_policy import read_preview_policy, store_preview_policy
 from src.importing.previews import rebuild_previews
 from src.catalog.startup_policy import plan_startup, require_catalog
 from src.config.config_manager import ConfigManager
@@ -31,6 +33,7 @@ from src.ui.catalog_filter import CATALOG_FILTER
 from src.ui.progress_reporter import ProgressReporter
 from src.ui.dialogs import ImportDialog
 from src.ui.dialogs.catalog_settings_dialog import CatalogSettingsDialog
+from src.ui.dialogs.preview_cache_dialog import PreviewCacheDialog
 from src.ui.dialogs.select_catalog_dialog import SelectCatalogDialog
 from src.ui.widgets.module_bar import ModuleBar
 
@@ -206,6 +209,8 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._open_catalog_dialog)
         settings_action = file_menu.addAction("Catalog &Settings...")
         settings_action.triggered.connect(self._edit_catalog_settings)
+        preview_policy_action = file_menu.addAction("Preview Cache &Settings...")
+        preview_policy_action.triggered.connect(self._edit_preview_cache_settings)
         backup_action = file_menu.addAction("&Back Up Catalog")
         backup_action.triggered.connect(self._back_up_catalog)
         check_action = file_menu.addAction("Check Catalog &Integrity")
@@ -279,7 +284,9 @@ class MainWindow(QMainWindow):
 
     def _open_chosen_catalog(self, path: Path) -> None:
         try:
-            self._use_catalog(open_catalog(path))
+            opened = open_catalog(path)
+            maintain_preview_cache(opened)
+            self._use_catalog(opened)
         except (OSError, ValueError) as error:
             self.logger.error("Open catalog failed: %s: %s", path, error)
             QMessageBox.warning(self, "Open Catalog", str(error))
@@ -304,6 +311,14 @@ class MainWindow(QMainWindow):
     def _store_startup(self, dialog: CatalogSettingsDialog) -> None:
         self.config_manager.set("catalog.startup_mode", dialog.chosen_mode())
         self.config_manager.set("catalog.fixed_path", dialog.chosen_fixed_path())
+
+    def _edit_preview_cache_settings(self) -> None:
+        if self.catalog_path is None:
+            return
+        dialog = PreviewCacheDialog(read_preview_policy(self.catalog_path), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        store_preview_policy(self.catalog_path, dialog.chosen_policy())
 
     def launch_window(self) -> bool:
         chosen = require_catalog(self._catalog_settings(), SelectCatalogDialog.pick)
@@ -330,6 +345,7 @@ class MainWindow(QMainWindow):
             self._show_open_catalog(path)
 
     def _show_open_catalog(self, path: Path) -> None:
+        maintain_preview_cache(path)
         self._publish_catalog(path)
 
     def _publish_catalog(self, path: Path) -> None:
