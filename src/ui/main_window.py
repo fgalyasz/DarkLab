@@ -16,7 +16,7 @@ from src.catalog.backup import BackupError, backup_catalog, default_backup_root
 from src.catalog.database import create_catalog, open_catalog
 from src.catalog.integrity import CatalogIntegrityError, check_integrity, require_healthy
 from src.catalog.optimize import CatalogOptimizeError, optimize_catalog
-from src.catalog.optimize_policy import read_optimize_policy, store_optimize_policy
+from src.catalog.optimize_policy import OptimizePolicy, read_optimize_policy, store_optimize_policy
 from src.catalog.preview_maintenance import maintain_preview_cache
 from src.catalog.preview_policy import read_preview_policy, store_preview_policy
 from src.importing.previews import rebuild_previews
@@ -36,6 +36,7 @@ from src.ui.dialogs import ImportDialog
 from src.ui.dialogs.catalog_settings_dialog import CatalogSettingsDialog
 from src.ui.dialogs.optimize_automation_dialog import OptimizeAutomationDialog
 from src.ui.dialogs.preview_cache_dialog import PreviewCacheDialog
+from src.ui.optimize_idle import OptimizeIdleWatcher
 from src.ui.optimize_on_quit import optimize_on_quit
 from src.ui.dialogs.select_catalog_dialog import SelectCatalogDialog
 from src.ui.widgets.module_bar import ModuleBar
@@ -67,9 +68,8 @@ class MainWindow(QMainWindow):
         self._setup_window()
         self._setup_ui()
         self._setup_panels()
+        self._optimize_idle = OptimizeIdleWatcher(self)
         self._apply_initial_state()
-        
-        # Setup auto-save timer
         self._auto_save_timer = QTimer()
         self._auto_save_timer.timeout.connect(self._auto_save_state)
         self._auto_save_timer.start(5000)  # Save every 5 seconds
@@ -331,7 +331,9 @@ class MainWindow(QMainWindow):
         dialog = OptimizeAutomationDialog(read_optimize_policy(self.catalog_path), self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        store_optimize_policy(self.catalog_path, dialog.chosen_policy())
+        policy = dialog.chosen_policy()
+        store_optimize_policy(self.catalog_path, policy)
+        self._sync_optimize_idle()
 
     def launch_window(self) -> bool:
         chosen = require_catalog(self._catalog_settings(), SelectCatalogDialog.pick)
@@ -365,6 +367,13 @@ class MainWindow(QMainWindow):
         self.catalog_path = path
         self.setWindowTitle(f"{path.stem} - DarkLab")
         self._show_catalog_photos(path)
+        self._sync_optimize_idle()
+
+    def _sync_optimize_idle(self) -> None:
+        if self.catalog_path is None:
+            self._optimize_idle.apply(None, OptimizePolicy(False, 0))
+            return
+        self._optimize_idle.apply(self.catalog_path, read_optimize_policy(self.catalog_path))
 
     def _show_catalog_photos(self, path: Path) -> None:
         for panel in self.panels.values():

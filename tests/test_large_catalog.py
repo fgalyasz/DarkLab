@@ -257,6 +257,15 @@ class LargeCatalogPanelTests(unittest.TestCase):
         self.panel.rating_combo.setCurrentIndex(self.panel.rating_combo.findData("3"))
         self.assertEqual(self.panel.grid.images, [index_image_path(self.catalog, 9)])
 
+    def test_flag_filter_still_works_after_optimize(self) -> None:
+        catalog = _catalog(((1, "/shoot/a.jpg", 1.0), (2, "/shoot/b.jpg", 2.0)))
+        optimize_catalog(catalog)
+        write_mark(catalog, 2, "pick", "accepted")
+        panel = _panel(catalog)
+        self.addCleanup(panel.close)
+        panel.pick_combo.setCurrentIndex(panel.pick_combo.findData("accepted"))
+        self.assertEqual(panel.grid.images, [index_image_path(catalog, 2)])
+
 
 if __name__ == "__main__":
     unittest.main()
