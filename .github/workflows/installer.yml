@@ -14,18 +14,34 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: DarkLab
+          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: fgalyasz/TenPrintSoftware
+          path: TenPrintSoftware
+          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install company site tools
+        working-directory: TenPrintSoftware
+        run: npm ci
       - name: Install native deps
         run: brew install inih
       - name: Import signing identity
+        working-directory: DarkLab
         env:
           CODESIGN_P12_BASE64: ${{ secrets.CODESIGN_P12_BASE64 }}
           CODESIGN_P12_PASSWORD: ${{ secrets.CODESIGN_P12_PASSWORD }}
           CODESIGN_KEYCHAIN_PASSWORD: ${{ secrets.CODESIGN_KEYCHAIN_PASSWORD }}
         run: bash scripts/ci_import_signing.sh darklab-signing "DarkLab Local"
       - name: Build installer image
+        working-directory: DarkLab
         run: |
           chmod +x ./scripts/build_dmg.sh ./scripts/ci_import_signing.sh ./scripts/ci_commit_release.sh
           ./scripts/build_dmg.sh
@@ -37,15 +53,28 @@ jobs:
           printf '%s\n' "${WRANGLER_CONFIG}" > "${HOME}/Library/Preferences/.wrangler/config/default.toml"
           chmod 600 "${HOME}/Library/Preferences/.wrangler/config/default.toml"
       - name: Deploy product site
+        working-directory: DarkLab
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           chmod +x ./scripts/deploy_site.sh
           ./scripts/deploy_site.sh
+      - name: Publish company catalogue
+        working-directory: TenPrintSoftware
+        run: |
+          npm run sync:versions
+          npm run build
+          npm run deploy
       - name: Commit version
+        working-directory: DarkLab
         run: bash scripts/ci_commit_release.sh
+      - name: Commit company catalogue version
+        working-directory: DarkLab
+        env:
+          TENPRINT_ROOT: ${{ github.workspace }}/TenPrintSoftware
+        run: bash scripts/ci_commit_release.sh company
       - uses: actions/upload-artifact@v4
         with:
           name: DarkLab-installer
-          path: dist/DarkLab.dmg
+          path: DarkLab/dist/DarkLab.dmg
           if-no-files-found: error
