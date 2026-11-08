@@ -78,3 +78,14 @@ jobs:
           name: DarkLab-installer
           path: DarkLab/dist/DarkLab.dmg
           if-no-files-found: error
+      - name: Notify on first success or recovery
+        working-directory: TenPrintSoftware
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CONTACT_TO: ${{ secrets.CONTACT_TO }}
+          CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
+        run: |
+          RELEASE_VERSION="$(tr -d ' \t\n\r' < ../DarkLab/docs/version.txt 2>/dev/null || true)" \
+            node scripts/notify_installer_recovery.mjs
+
