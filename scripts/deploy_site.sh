@@ -11,10 +11,16 @@ version="$(tr -d ' \t\n\r' < "${ROOT}/docs/version.txt")"
 [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 tag="v${version}"
 download_url="https://github.com/fgalyasz/DarkLab/releases/download/${tag}/${PACKAGE_NAME}.dmg"
-gh release create "${tag}" "${ROOT}/dist/${PACKAGE_NAME}.dmg" \
-  --repo fgalyasz/DarkLab \
-  --title "${PACKAGE_NAME} ${version}" \
-  --notes "macOS installer ${version}. Signed for the build and not notarized."
+if gh release view "${tag}" --repo fgalyasz/DarkLab >/dev/null 2>&1; then
+  gh release upload "${tag}" "${ROOT}/dist/${PACKAGE_NAME}.dmg" \
+    --repo fgalyasz/DarkLab \
+    --clobber
+else
+  gh release create "${tag}" "${ROOT}/dist/${PACKAGE_NAME}.dmg" \
+    --repo fgalyasz/DarkLab \
+    --title "${PACKAGE_NAME} ${version}" \
+    --notes "macOS installer ${version}. Signed for the build and not notarized."
+fi
 rm -rf "${GATEWAY}"
 mkdir -p "${GATEWAY}"
 cat > "${GATEWAY}/index.html" <<EOF

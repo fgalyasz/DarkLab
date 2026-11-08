@@ -49,18 +49,23 @@ jobs:
         env:
           WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
         run: |
-          mkdir -p "${HOME}/Library/Preferences/.wrangler/config"
-          printf '%s\n' "${WRANGLER_CONFIG}" > "${HOME}/Library/Preferences/.wrangler/config/default.toml"
-          chmod 600 "${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          if [[ -n "${WRANGLER_CONFIG}" ]]; then
+            mkdir -p "${HOME}/Library/Preferences/.wrangler/config"
+            printf '%s\n' "${WRANGLER_CONFIG}" > "${HOME}/Library/Preferences/.wrangler/config/default.toml"
+            chmod 600 "${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          fi
       - name: Deploy product site
         working-directory: DarkLab
         env:
           GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           chmod +x ./scripts/deploy_site.sh
           ./scripts/deploy_site.sh
       - name: Publish company catalogue
         working-directory: TenPrintSoftware
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           npm run sync:versions
           npm run build
