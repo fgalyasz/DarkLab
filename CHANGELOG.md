@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The macOS `DarkLab.app` installer bundle now includes `pyexiv2`'s native libraries (`libexiv2.dylib` and its dependencies) and writes startup and panel logs to `~/Library/Logs/DarkLab/`, so the installed app launches cleanly from `/Applications` (story 18.4).
 - Optimize Automation on the open catalog can run Optimize after idle time or on quit, with cancel and progress, and skips while an Import copy is in flight (story 22.8).
 - Preview Cache Settings on the open catalog cap grid index JPEG size and quality and set optional 1:1 cache limits. Import and Rebuild Previews follow the grid caps. When discard is enabled, stale files under `previews/full/` are removed on open after the chosen number of days; grid index images in `previews/` are kept.
 - Develop's filmstrip uses the same windowed loading as Library. Opening Develop on a large catalog decodes only the cells in view plus a few either side, then more as you scroll; decoded strip images are kept in a bounded cache of 400. Develop lists the photographs recorded in the catalog (like Library), so stray files in `previews/` no longer appear. Nothing in the catalog or the originals changes.

@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.config.config_manager import ConfigManager
+from src.startup import log_file
 from src.ui.import_summary import byte_total, import_status_text
 from src.importing.discover import discover_images
 from src.importing.originals import import_originals, is_duplicate
@@ -47,9 +48,7 @@ from src.models.iptc_data import (
 logger = logging.getLogger(__name__)
 
 # Ensure file-based logging for this module
-_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
-os.makedirs(_log_dir, exist_ok=True)
-_log_path = os.path.join(_log_dir, "import_dialog.log")
+_log_path = str(log_file("import_dialog.log"))
 
 _file_handler_exists = False
 for _h in logger.handlers:

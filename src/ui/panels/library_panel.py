@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QKeySequence, QShortcut
 
 from src.config.config_manager import ConfigManager
+from src.startup import log_file
 from src.ui.widgets.grid_image_widget import GridImageWidget
 from src.ui.dialogs import RenamePatternDialog, DestinationSettingsDialog
 from .base_panel import BasePanel
@@ -39,9 +40,7 @@ from .base_panel import BasePanel
 logger = logging.getLogger(__name__)
 
 # Ensure file-based logging for this module in addition to any global handlers
-_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
-os.makedirs(_log_dir, exist_ok=True)
-_log_path = os.path.join(_log_dir, "library_panel.log")
+_log_path = str(log_file("library_panel.log"))
 
 _file_handler_exists = False
 for _h in logger.handlers:

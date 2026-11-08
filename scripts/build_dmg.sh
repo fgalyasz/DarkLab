@@ -23,6 +23,7 @@ python3 -m PyInstaller \
   --noconfirm \
   --windowed \
   --name DarkLab \
+  --collect-binaries pyexiv2 \
   --distpath "${dist}" \
   --workpath "${root}/build/pyinstaller" \
   main.py

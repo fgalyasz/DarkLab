@@ -8,7 +8,7 @@ import sys
 import logging
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QScreen
-from src.startup import launch_is_allowed
+from src.startup import launch_is_allowed, log_file
 from src.ui.main_window import MainWindow
 
 
@@ -18,7 +18,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('darklab.log'),
+            logging.FileHandler(log_file()),
             logging.StreamHandler()
         ]
     )
