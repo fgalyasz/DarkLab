@@ -35,7 +35,7 @@ fi
 version="$(tr -d ' \t\n\r' < "${root}/docs/version.txt")"
 git commit -m "Release ${version} [skip ci]"
 for attempt in 1 2 3; do
-  git pull --rebase -X theirs origin main
+  git pull --rebase --autostash -X theirs origin main
   if git push origin HEAD:main; then
     exit 0
   fi
