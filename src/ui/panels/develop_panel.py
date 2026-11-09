@@ -31,6 +31,7 @@ from src.ui.themes import StyleSheet
 from src.ui.crop_binding import CropBinding
 from src.ui.white_balance_binding import WhiteBalanceBinding
 from src.imaging.color_grade import ColorGrade
+from src.imaging.presence import PresenceSettings
 from src.ui.preview_image import clipping_overlay, crop_preview, grade_image, tone_image
 from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
@@ -398,7 +399,8 @@ class DevelopPanel(BasePanel):
     def _edited_image(self) -> QImage:
         cropped = crop_preview(self._source_image, self._crop.read())
         toned = tone_image(cropped, self._slider_value("Exposure"), self._slider_value("Contrast"))
-        return grade_image(toned, ColorGrade.from_tone(self._controls.named_values(TONE_KEYS)))
+        tone = self._controls.named_values(TONE_KEYS)
+        return grade_image(toned, ColorGrade.from_tone(tone), PresenceSettings.from_tone(tone))
 
     def _slider_value(self, title: str) -> int:
         for row in self._controls.sliders:

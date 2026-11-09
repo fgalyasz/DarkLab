@@ -6,6 +6,7 @@ from src.develop.crop_settings import CropSettings, crop_box
 
 from src.imaging.clipping import clipping_color
 from src.imaging.color_grade import ColorGrade, apply_grade
+from src.imaging.presence import PresenceSettings, apply_presence
 from src.imaging.preview_tone import tone_channel
 
 
@@ -66,11 +67,22 @@ def _paint_clipped_row(image: QImage, y: int) -> None:
             image.setPixelColor(x, y, QColor(*clipped))
 
 
-def grade_image(image: QImage, grade: ColorGrade) -> QImage:
-    if image.isNull() or grade.is_neutral:
+def grade_image(
+    image: QImage,
+    grade: ColorGrade,
+    presence: PresenceSettings | None = None,
+) -> QImage:
+    if image.isNull():
         return image
-    graded = apply_grade(_pixel_array(image), grade)
-    return _image_from_array(graded)
+    presence = presence or PresenceSettings()
+    if grade.is_neutral and presence.is_neutral:
+        return image
+    pixels = _pixel_array(image)
+    if not grade.is_neutral:
+        pixels = apply_grade(pixels, grade)
+    if not presence.is_neutral:
+        pixels = apply_presence(pixels, presence)
+    return _image_from_array(pixels)
 
 
 def average_rgb(image: QImage) -> tuple[float, float, float]:
