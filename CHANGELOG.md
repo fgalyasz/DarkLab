@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- GitHub Actions on `main` now builds frozen Linux (`DarkLab-linux-x86_64.tar.gz`) and Windows (`DarkLab-windows-x64.zip`) bundles alongside the signed macOS DMG, using the same PyInstaller flags and `pyexiv2` binary collection as `build_dmg.sh` (story 18.1).
+- File and panel logs on Linux and Windows go to a user-writable folder (`~/.local/state/DarkLab/logs` or `%LOCALAPPDATA%/DarkLab/logs`) instead of the macOS-only `~/Library/Logs/DarkLab` path.
 - The macOS `DarkLab.app` installer bundle now includes `pyexiv2`'s native libraries (`libexiv2.dylib` and its dependencies) and writes startup and panel logs to `~/Library/Logs/DarkLab/`, so the installed app launches cleanly from `/Applications` (story 18.4).
 - Optimize Automation on the open catalog can run Optimize after idle time or on quit, with cancel and progress, and skips while an Import copy is in flight (story 22.8).
 - Preview Cache Settings on the open catalog cap grid index JPEG size and quality and set optional 1:1 cache limits. Import and Rebuild Previews follow the grid caps. When discard is enabled, stale files under `previews/full/` are removed on open after the chosen number of days; grid index images in `previews/` are kept.
