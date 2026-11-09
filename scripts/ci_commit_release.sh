@@ -34,7 +34,11 @@ fi
 
 version="$(tr -d ' \t\n\r' < "${root}/docs/version.txt")"
 git commit -m "Release ${version} [skip ci]"
-if [[ "${1:-}" == "company" ]]; then
-  git pull --rebase origin main
-fi
-git push
+for attempt in 1 2 3; do
+  git pull --rebase -X theirs origin main
+  if git push origin HEAD:main; then
+    exit 0
+  fi
+  sleep 2
+done
+exit 1
