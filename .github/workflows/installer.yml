@@ -104,13 +104,21 @@ jobs:
           ./scripts/build_dmg.sh
       - name: Restore Cloudflare login
         env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
           WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
         run: |
-          if [[ -n "${WRANGLER_CONFIG}" ]]; then
-            mkdir -p "${HOME}/Library/Preferences/.wrangler/config"
-            printf '%s\n' "${WRANGLER_CONFIG}" > "${HOME}/Library/Preferences/.wrangler/config/default.toml"
-            chmod 600 "${HOME}/Library/Preferences/.wrangler/config/default.toml"
-            cp "${HOME}/Library/Preferences/.wrangler/config/default.toml" "${RUNNER_TEMP}/wrangler-before.toml"
+          mkdir -p "${HOME}/Library/Preferences/.wrangler/config"
+          cfg="${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          enc="$(gh variable get WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware 2>/dev/null || true)"
+          if [[ -n "${enc}" ]] && printf '%s' "${enc}" | PASS="${GH_TOKEN}" openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:PASS > "${cfg}" 2>/dev/null && [[ -s "${cfg}" ]]; then
+            echo "Restored live Cloudflare login from WRANGLER_CONFIG_ENC"
+          elif [[ -n "${WRANGLER_CONFIG}" ]]; then
+            printf '%s\n' "${WRANGLER_CONFIG}" > "${cfg}"
+            echo "Restored Cloudflare login from WRANGLER_CONFIG secret"
+          fi
+          if [[ -s "${cfg}" ]]; then
+            chmod 600 "${cfg}"
+            cp "${cfg}" "${RUNNER_TEMP}/wrangler-before.toml"
           fi
       - name: Deploy product site
         working-directory: DarkLab
@@ -135,7 +143,9 @@ jobs:
         run: |
           cfg="${HOME}/Library/Preferences/.wrangler/config/default.toml"
           before="${RUNNER_TEMP}/wrangler-before.toml"
-          if [[ -s "${cfg}" ]] && [[ -f "${before}" ]] && ! cmp -s "${cfg}" "${before}"; then
+          if [[ -s "${cfg}" ]] && [[ -f "${before}" ]] && ! cmp -s "${cfg}" "${before}" && grep -q "oauth_token" "${cfg}"; then
+            enc="$(PASS="${GH_TOKEN}" openssl enc -aes-256-cbc -pbkdf2 -salt -base64 -A -pass env:PASS -in "${cfg}")"
+            gh variable set WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware --body "${enc}"
             for repo in DarkLab SnappyZones SessionGuard WalkAway MarkSweep 8bitEmu; do
               gh secret set WRANGLER_CONFIG --repo "fgalyasz/${repo}" < "${cfg}"
             done
