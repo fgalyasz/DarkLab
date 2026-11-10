@@ -10,7 +10,7 @@ From the repo root, with `requirements.txt` installed:
 python scripts/milestone_smoke.py
 ```
 
-CI should run this on macOS, Linux, and Windows before the unit suite (see `.github/workflows/tests.yml` matrix when the workflow scope is available on the push token).
+CI should run this on macOS, Linux, and Windows before the unit suite. The prepared `tests.yml` matrix (ubuntu-24.04, macos-latest, windows-latest) could not be pushed from the cloud token without the `workflow` scope; apply that change on a machine that can update workflows.
 
 ## Manual on each OS
 
