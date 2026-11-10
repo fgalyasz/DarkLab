@@ -198,7 +198,7 @@ class FilmstripModelTests(unittest.TestCase):
         index = model.index(0)
         self.assertEqual(index.data(), "a.jpg")
         self.assertFalse(index.data(1).isNull())
-        self.assertEqual(index.data(0x0100), "/x/a.jpg")
+        self.assertEqual(index.data(0x0100), str(Path("/x/a.jpg")))
         self.assertIsNone(model.data(index, 99))
         self.assertIsNone(model.data(model.index(5), 0))
         self.assertEqual(model.rowCount(index), 0)

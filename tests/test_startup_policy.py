@@ -65,7 +65,7 @@ class StartupPolicyTests(unittest.TestCase):
         updated = remember_catalog(settings, Path("/new.darklab"))
         self.assertEqual(updated["startup_mode"], FIXED)
         self.assertEqual(updated["fixed_catalog"], "/pin.darklab")
-        self.assertEqual(updated["catalog_path"], "/new.darklab")
+        self.assertEqual(updated["catalog_path"], str(Path("/new.darklab")))
 
     def _catalog(self, name: str) -> Path:
         return create_catalog(Path(tempfile.mkdtemp()) / name)

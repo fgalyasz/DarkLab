@@ -39,8 +39,7 @@ def catalog_folders(catalog: Path) -> list[CatalogFolder]:
 
 
 def folder_photo_ids(catalog: Path, folder: Path) -> tuple[int, ...]:
-    directory = str(folder)
-    return tuple(photo_id for photo_id, original in _stored_rows(catalog) if os.path.dirname(original) == directory)
+    return tuple(photo_id for photo_id, original in _stored_rows(catalog) if Path(original).parent == folder)
 
 
 def relink_folder(catalog: Path, folder: Path, replacement: Path, confirm_different: bool = False) -> int:

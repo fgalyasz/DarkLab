@@ -36,7 +36,7 @@ class CatalogPackageTests(unittest.TestCase):
         add_imported_folder(catalog, Path("/shoots/wedding"))
         write_index_image(catalog, 4, b"jpeg")
         write_catalog_setting(catalog, "preview_size", "standard")
-        self.assertEqual(imported_folders(catalog), ["/shoots/wedding"])
+        self.assertEqual(imported_folders(catalog), [str(Path("/shoots/wedding"))])
         self.assertEqual(read_index_image(catalog, 4), b"jpeg")
         self.assertEqual(read_catalog_setting(catalog, "preview_size"), "standard")
         self.assertEqual(read_catalog_setting(database_file(catalog), "preview_size"), "standard")
@@ -95,7 +95,7 @@ class CatalogPackageTests(unittest.TestCase):
         write_index_image(catalog, 1, b"jpeg")
         shutil.rmtree(catalog / PREVIEWS_NAME)
         self.assertEqual(open_catalog(catalog), catalog)
-        self.assertEqual(imported_folders(catalog), ["/shoots/wedding"])
+        self.assertEqual(imported_folders(catalog), [str(Path("/shoots/wedding"))])
         self.assertEqual(read_catalog_setting(catalog, "preview_size"), "standard")
         self.assertIsNone(read_index_image(catalog, 1))
 
