@@ -12,7 +12,14 @@ if str(ROOT) not in sys.path:
 from src.smoke.milestone_one_shoot import run_milestone_one_shoot
 
 
+def _configure_utf8_stdout() -> None:
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    _configure_utf8_stdout()
     work = Path(tempfile.mkdtemp(prefix="darklab-smoke-"))
     run_milestone_one_shoot(work)
     print("milestone smoke: import → flag → tone → export OK")
