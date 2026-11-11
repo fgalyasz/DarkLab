@@ -102,6 +102,14 @@ jobs:
         run: |
           chmod +x ./scripts/build_dmg.sh ./scripts/ci_import_signing.sh ./scripts/ci_commit_release.sh
           ./scripts/build_dmg.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: DarkLab-linux-x86_64
+          path: DarkLab/dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: DarkLab-windows-x64
+          path: DarkLab/dist
       - name: Restore Cloudflare login
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
