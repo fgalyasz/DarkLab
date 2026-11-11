@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- GitHub Releases and the product gateway list macOS, Linux, and Windows installers when CI publishes a build (story 18.5).
 - CI runs the milestone one-shoot smoke script on macOS, Linux, and Windows before the unit suite, proving Import → Flag → basic tone → Export and ADR-2 catalog layout on each OS (story 18.2).
 - Develop and Export apply Texture, Clarity, and Dehaze to the Preview, histogram, and rendered JPEG/TIFF, not only store them in the catalog.
 - GitHub Actions on `main` now builds frozen Linux (`DarkLab-linux-x86_64.tar.gz`) and Windows (`DarkLab-windows-x64.zip`) bundles alongside the signed macOS DMG, using the same PyInstaller flags and `pyexiv2` binary collection as `build_dmg.sh` (story 18.1).
