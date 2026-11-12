@@ -80,6 +80,42 @@ Fast path, 2026-10-10. Epic order follows the thesis: finish one shoot, then org
 - FR-55 A new Catalog shows no Photos
 - FR-56 The Library grid lists Catalog index images
 - FR-57 Import writes index images
+- FR-80 Configurable Auto-Cull criteria, weights, thresholds, and profiles
+- FR-81 Per-Photo quality metric extraction (sharpness, eyes open, smile, exposure, framing, pHash) and SQLite cache
+- FR-82 Burst and near-duplicate grouping with best-shot selection
+- FR-83 Automatic Flag, Rating, and Color Label assignment rules
+- FR-84 Import Assisted Culling workflow
+- FR-85 Library Auto-Cull batch action and explainable score breakdown
+- FR-86 Full Basic panel, B&W Treatment, and live preview binding
+- FR-87 Parametric and Point Tone Curve (RGB, R, G, B)
+- FR-88 8-Band Color Mixer (HSL) and 4-Way Color Grading Wheels
+- FR-89 Detail (Sharpening & Noise Reduction) with 1:1 preview and unique keys
+- FR-90 Lens Corrections and Perspective Transform with Constrain Crop
+- FR-91 Post-Crop Vignetting, Film Grain, and Camera Calibration
+- FR-92 Interactive Crop Overlay, Spot Heal/Clone, Red Eye, and Local Masks
+- FR-93 Develop Presets with Amount slider, Snapshots, Copy/Paste, Soft Proofing, and Persistent History
+- FR-94 Scene-analyzed Auto Tone (Exposure, Contrast, Highlights, Shadows, Whites, Blacks)
+- FR-95 Auto White Balance (Temp and Tint)
+- FR-96 Auto Presence (Vibrance, Clarity, Dehaze)
+- FR-97 Auto Lens Profile & Chromatic Aberration Correction
+- FR-98 Integrated Auto Upright & Horizon Leveling (Auto, Level, Vertical, Full)
+- FR-99 AI Scene-Aware Auto-Develop and Subject Relight
+- FR-100 AI Semantic Masking (Subject, Sky, Background, and People-Parts)
+- FR-101 AI Portrait Retouch (Skin Smoothing, Eye Enhancer, Teeth Whitening)
+- FR-102 AI Denoise and AI Sharpen / Motion Deblur Assist
+- FR-103 AI Sensor Dust and Blemish Auto-Heal
+- FR-104 AI Adaptive Presets with Amount Scaling
+- FR-105 Auto-Crop configuration model and presets
+- FR-106 Subject, Face, Eye-Line, and Saliency Anchor Detection
+- FR-107 Composition-Rule and Aspect-Ratio Crop Solver
+- FR-108 Straighten-Constrained Inscribed Bounding Box
+- FR-109 Develop and Library Auto-Crop UI and History Integration
+- FR-110 Multi-Photo Selection in Develop Filmstrip and Library Grid
+- FR-111 Selective Sync Dialog and Copy/Paste Across Multiple Photos
+- FR-112 Develop Auto-Sync Mode
+- FR-113 Relative (Delta) and Absolute Multi-Photo Quick Develop
+- FR-114 Match Total Exposure Across Selected Photos
+- FR-115 Per-Photo Computed Batch Auto-Corrections, Batch Auto-Crop, and Batch AI Corrections
 
 ### NonFunctional Requirements
 
@@ -162,6 +198,42 @@ No UX document. Stories use the Module names from the PRD glossary.
 - FR-55 Epic 14
 - FR-56 Epic 14
 - FR-57 Epic 15
+- FR-80 Epic 23
+- FR-81 Epic 23
+- FR-82 Epic 23
+- FR-83 Epic 23
+- FR-84 Epic 23
+- FR-85 Epic 23
+- FR-86 Epic 24
+- FR-87 Epic 24
+- FR-88 Epic 24
+- FR-89 Epic 24
+- FR-90 Epic 24
+- FR-91 Epic 24
+- FR-92 Epic 24
+- FR-93 Epic 24
+- FR-94 Epic 25
+- FR-95 Epic 25
+- FR-96 Epic 25
+- FR-97 Epic 25
+- FR-98 Epic 25
+- FR-99 Epic 26
+- FR-100 Epic 26
+- FR-101 Epic 26
+- FR-102 Epic 26
+- FR-103 Epic 26
+- FR-104 Epic 26
+- FR-105 Epic 27
+- FR-106 Epic 27
+- FR-107 Epic 27
+- FR-108 Epic 27
+- FR-109 Epic 27
+- FR-110 Epic 28
+- FR-111 Epic 28
+- FR-112 Epic 28
+- FR-113 Epic 28
+- FR-114 Epic 28
+- FR-115 Epic 28
 
 ## Epic List
 
@@ -180,6 +252,12 @@ No UX document. Stories use the Module names from the PRD glossary.
 13. Catalog package — one folder holds imported folders, index images, and that Catalog's settings
 14. Library grid — the grid lists the open Catalog's index images and stays empty until some exist
 15. Import index images — Import writes an index image for each Photo and the grid shows it
+23. Configurable Auto-Cull on Import and Library — automatic selection by configurable criteria (eyes, smile, sharpness, exposure, framing, burst winner)
+24. Complete End-to-End Develop Pipeline and Controls — full persistence, live preview, 12-stage rendering, and tools for every Develop panel
+25. Automatic Image Corrections — deterministic scene-analyzed Auto Tone, Auto WB, Auto Presence, Auto Lens/CA, and Auto Upright
+26. AI Image Correction and Enhancement Suite — local-first AI Auto-Develop/Relight, Semantic Masks, Portrait Retouch, AI Denoise/Sharpen, Dust Auto-Heal, and Adaptive Presets
+27. Configurable Auto-Crop and Smart Framing — rule-based and subject/face/horizon-aware automatic cropping with straighten bounds
+28. Multi-Photo Batch Image Manipulation and Sync — multi-selection, selective Sync, Auto-Sync, relative/absolute Quick Develop, Match Total Exposure, and per-photo computed Batch Auto/AI/Crop
 
 ## Epic 1: Catalog and Import
 
@@ -1120,3 +1198,563 @@ So that the Library grid shows the photographs I just imported.
 **Given** the Import dialog closes
 **When** the Library is showing the same Catalog
 **Then** the grid lists the new index images
+
+## Epic 23: Configurable Auto-Cull on Import and Library
+
+Feature PRD: `https://github.com/fgalyasz/DarkLab/blob/main/_bmad-output/planning-artifacts/prds/prd-DarkLab-configurable-auto-cull/prd.md` (`FR-80`–`FR-85`, `ADR-10`, `ADR-16`)
+
+A Photographer can automatically select imported Photos based on configurable criteria (eyes open, smile, sharpness, exposure health, framing, and burst grouping) during Import and in Library.
+
+### Story 23.1: Configurable culling criteria model and presets
+
+As a Photographer,
+I want to configure Auto-Cull weights and minimum thresholds (sharpness, eyes open, smile, exposure, framing, burst settings) and choose or save a Culling Profile,
+So that portrait shoots prioritize open eyes and smiles while action or landscape shoots prioritize sharpness and exposure.
+
+**Acceptance Criteria:**
+
+**Given** a Catalog
+**When** a `CullCriteria` profile (`Portrait & Wedding`, `Event & Action`, `Landscape & Architecture`, or `Custom`) is saved to `settings.json` (`auto_cull` key)
+**Then** reading `auto_cull` back returns the exact weights, thresholds, burst window, and `preserve_manual_marks` flag
+**And** out-of-range weights or thresholds are clamped to `0..100`
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/culling/criteria.py`
+- Key types/functions (≤10 lines each): `CullCriteria` frozen dataclass, `BUILT_IN_PROFILES`, `encode_criteria(criteria) -> dict`, `decode_criteria(raw) -> CullCriteria`, `load_cull_criteria(catalog) -> CullCriteria`, `save_cull_criteria(catalog, criteria) -> None`
+- Unit test file: `tests/test_cull_criteria.py` (≥95% coverage)
+
+### Story 23.2: Per-Photo quality metric extractor (sharpness, eyes, smile, exposure, framing, pHash)
+
+As a Photographer,
+I want DarkLab to evaluate sharpness, face/eye openness, smile/expression, exposure health, framing margin, and a perceptual hash for each Photo offline,
+So that culling decisions are based on objective image signals without uploading files.
+
+**Acceptance Criteria:**
+
+**Given** a sharp portrait with open eyes and a blurred frame with closed eyes
+**When** `extract_cull_metrics` runs on both images
+**Then** the sharp portrait receives higher `sharpness_score`, `eyes_open_score`, and `all_eyes_open = True`
+**And** a Photo with `face_count == 0` still receives valid `sharpness_score`, `exposure_score`, `framing_score`, and `perceptual_hash`
+**And** Original bytes are never modified
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/culling/metrics.py`
+- Key types/functions (≤10 lines each): `PhotoCullMetrics` frozen dataclass, `extract_cull_metrics(pixels: np.ndarray) -> PhotoCullMetrics`, `measure_sharpness(gray)`, `measure_exposure(gray)`, `compute_dhash(gray) -> str`, `detect_face_signals(gray, bgr)`
+- Unit test file: `tests/test_cull_metrics.py` (≥95% coverage)
+
+### Story 23.3: Burst grouping and weighted composite scorer
+
+As a Photographer,
+I want sequential burst shots grouped together and scored against my active `CullCriteria` weights,
+So that the best frame in each burst is marked `Pick` and blinked or blurry frames are marked `Rejected`.
+
+**Acceptance Criteria:**
+
+**Given** cached `PhotoCullMetrics` for a shoot and a `CullCriteria` profile
+**When** `evaluate_cull_batch` runs
+**Then** Photos within `burst_time_window_sec` and `burst_hamming_max` form burst groups
+**And** the top-scoring Photo in each burst above `pick_score_min` gets `pick = "accepted"`
+**And** Photos failing hard defect rules (`all_eyes_open == False` when `reject_closed_eyes` is on, or `sharpness_score < reject_sharpness_floor`) get `pick = "rejected"`
+**And** Photos with `face_count == 0` exclude eye/smile weights from the composite denominator
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/culling/burst.py`, `src/culling/scorer.py`
+- Key functions (≤10 lines each): `hamming_distance(a, b) -> int`, `group_bursts(items, window_sec, max_hamming) -> list[list[int]]`, `compute_composite_score(metrics, criteria) -> int`, `decide_photo_marks(metrics, criteria, is_winner) -> dict[str, str]`
+- Unit test file: `tests/test_cull_scorer.py` (≥95% coverage)
+
+### Story 23.4: SQLite persistence for per-Photo cull metrics
+
+As a Photographer,
+I want computed quality metrics cached in `catalog.sqlite` by `photo_id` and `content_hash`,
+So that adjusting Auto-Cull sliders re-ranks 500 Photos immediately without re-decoding Originals.
+
+**Acceptance Criteria:**
+
+**Given** an open Catalog and extracted `PhotoCullMetrics`
+**When** `save_cull_metrics` writes them and `read_cull_metrics` reads them back
+**Then** all metric fields round-trip accurately
+**And** existing manual marks on Photos are preserved when `preserve_manual_marks` is `True`
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/catalog/schema_sql.py`, `src/catalog/cull_metrics_store.py`
+- Key functions (≤10 lines each): `save_cull_metrics(catalog, photo_id, content_hash, metrics)`, `read_cull_metrics(catalog, photo_id) -> PhotoCullMetrics | None`, `apply_cull_decisions(catalog, decisions, preserve_manual)`
+- Unit test file: `tests/test_cull_metrics_store.py` (≥95% coverage)
+
+### Story 23.5: Import Assisted Culling and Library Auto-Cull UI integration
+
+As a Photographer,
+I want to configure and run Auto-Cull in the Import dialog (`Assisted Culling`) and from the Library toolbar (`Auto-Cull...`),
+So that I can filter to picks during Import or auto-cull an existing Folder in Library with explainable score badges.
+
+**Acceptance Criteria:**
+
+**Given** `ImportDialog` in `Assisted Culling` mode or `LibraryBrowserPanel`
+**When** the Photographer opens `Auto-Cull...`, adjusts criteria sliders, and applies
+**Then** candidate/Catalog Photos receive suggested `pick` and `rating` marks off the UI thread with progress reporting
+**And** each Photo shows an explainable score summary (`Composite`, `Sharpness`, `Eyes`, `Smile`, `Exposure`)
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ui/dialogs/auto_cull_dialog.py`, `src/ui/dialogs/import_dialog.py`, `src/ui/panels/library_browser_panel.py`
+- Unit test file: `tests/test_auto_cull_ui.py` (≥95% coverage on domain/controller glue)
+
+## Epic 24: Complete End-to-End Develop Pipeline and Controls
+
+Feature PRD: `https://github.com/fgalyasz/DarkLab/blob/main/_bmad-output/planning-artifacts/prds/prd-DarkLab-complete-develop-pipeline/prd.md` (`FR-86`–`FR-93`, `ADR-11`, `ADR-16`)
+
+A Photographer can use every Develop panel and tool with live preview updates, full Catalog persistence, XMP sidecar round-trip, History steps, and identical Preview/Export rendering.
+
+### Story 24.1: Canonical settings schema, full Basic live preview, B&W Treatment, and Reset/Previous
+
+As a Photographer,
+I want all Basic sliders, the `Color / B&W` Treatment toggle, `Previous`, and `Reset` to update the Preview live and persist in `develop_settings`,
+So that no control in the Basic panel or bottom bar is inert.
+
+**Acceptance Criteria:**
+
+**Given** a Photo in Develop
+**When** any slider in `TONE_KEYS` (`Highlights`, `Shadows`, `Whites`, `Blacks`, `Texture`, `Clarity`, `Dehaze`, `Vibrance`, `Saturation`, `Exposure`, `Contrast`, `Temp`, `Tint`) or `Treatment` (`Color` / `B&W`) changes
+**Then** `_paint_preview()` updates immediately and the setting persists to `develop_settings`
+**And** clicking `Reset` persists default settings and records a `"Reset"` History Step
+**And** clicking `Previous` applies the previously edited Photo's settings as a `"Previous"` History Step
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/settings_schema.py`, `src/imaging/treatment.py`, `src/ui/panels/develop_panel.py`
+- Unit test file: `tests/test_develop_basic_complete.py` (≥95% coverage)
+
+### Story 24.2: Parametric and Point Tone Curve (RGB, Red, Green, Blue)
+
+As a Photographer,
+I want both the Parametric region sliders (`Highlights`, `Lights`, `Darks`, `Shadows`) and interactive Point Curve (`RGB`, `R`, `G`, `B`) to shape image contrast and persist per Photo,
+So that custom tonal curves round-trip through the Catalog, Preview, and Export.
+
+**Acceptance Criteria:**
+
+**Given** edited Parametric sliders and a control point added on the `Red` point curve
+**When** the Preview renders, the Catalog restarts, and Export runs
+**Then** both Preview and Export apply the 256-entry channel LUTs from `src/imaging/tone_curve.py`
+**And** reopening the Photo restores the exact Parametric slider values and curve control points
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/curve_settings.py`, `src/imaging/tone_curve.py`, `src/ui/widgets/tone_curve_widget.py`
+- Unit test file: `tests/test_tone_curve.py` (≥95% coverage)
+
+### Story 24.3: 8-Band Color Mixer (HSL) and 4-Way Color Grading Wheels
+
+As a Photographer,
+I want to adjust Hue, Saturation, and Luminance for each of the 8 color bands and grade Shadows, Midtones, Highlights, and Global color wheels,
+So that selective color and split-toning work end-to-end in Preview and Export.
+
+**Acceptance Criteria:**
+
+**Given** clicking a color dot in `Color Mixer` and adjusting `Hue`, `Saturation`, `Luminance`, and dragging the `Shadows` and `Highlights` `ColorWheel`s with `Blending` and `Balance`
+**When** settings are saved and rendered
+**Then** each of the 8 bands stores its own `HSL_<Band>_Hue|Sat|Lum` keys
+**And** `src/imaging/hsl_mixer.py` and `src/imaging/color_wheels.py` transform pixels identically in Preview and Export
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/hsl_grading_settings.py`, `src/imaging/hsl_mixer.py`, `src/imaging/color_wheels.py`, `src/ui/widgets/color_wheel.py`
+- Unit test file: `tests/test_hsl_and_grading.py` (≥95% coverage)
+
+### Story 24.4: Detail panel (Sharpening & Noise Reduction) with unique keys and 1:1 preview
+
+As a Photographer,
+I want distinct, working Sharpening (`Amount`, `Radius`, `Detail`, `Masking`) and Noise Reduction (`Luminance`, `Luminance Detail`, `Luminance Contrast`, `Color`, `Color Detail`, `Smoothness`) sliders with a 1:1 zoom toggle,
+So that high-ISO noise and fine edge sharpening are accurately previewed and exported.
+
+**Acceptance Criteria:**
+
+**Given** `SliderRow` controls in `detail_panel`
+**When** `Luminance Detail`, `Color Detail`, and `Sharpening Detail` are adjusted
+**Then** each slider writes its own unique key (`SharpAmount`, `SharpRadius`, `SharpDetail`, `SharpMasking`, `NrLuminance`, `NrLuminanceDetail`, `NrLuminanceContrast`, `NrColor`, `NrColorDetail`, `NrColorSmoothness`)
+**And** `src/imaging/detail.py` applies bilateral/wavelet noise reduction and edge-masked sharpening in Preview and Export
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/detail_settings.py`, `src/imaging/detail.py`, `src/ui/widgets/slider_row.py`, `src/ui/develop_sections.py`
+- Unit test file: `tests/test_detail_pipeline.py` (≥95% coverage)
+
+### Story 24.5: Lens Corrections, Perspective Transform, and Constrain Crop
+
+As a Photographer,
+I want profile/manual Lens Corrections (`Remove Chromatic Aberration`, `Enable Profile Corrections`, `Distortion`, `Vignetting`) and Perspective Transform (`Vertical`, `Horizontal`, `Rotate`, `Aspect`, `Scale`, `X Offset`, `Y Offset`, `Constrain Crop`),
+So that lens geometry and architectural perspective render cleanly without black corner wedges.
+
+**Acceptance Criteria:**
+
+**Given** lens distortion/vignetting or perspective Transform sliders with `Constrain Crop` checked
+**When** `src/imaging/lens_transform.py` renders the Photo
+**Then** chromatic aberration, radial distortion, lens vignetting, and homography warp apply in order
+**And** `Constrain Crop` insets the crop box so no blank border pixels remain
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/lens_transform_settings.py`, `src/imaging/lens_transform.py`
+- Unit test file: `tests/test_lens_transform.py` (≥95% coverage)
+
+### Story 24.6: Post-Crop Vignetting, Film Grain, and Camera Calibration
+
+As a Photographer,
+I want Post-Crop Vignetting, deterministic Film Grain, and Calibration (`Shadows Tint`, `Red/Green/Blue Primary Hue & Saturation`),
+So that creative finish and primary color calibration persist and render identically in Preview and Export.
+
+**Acceptance Criteria:**
+
+**Given** non-zero Vignette, Grain, and Calibration primary sliders
+**When** the Photo is rendered in Preview and Export
+**Then** `src/imaging/effects_calibration.py` applies primary matrix shifts, post-crop oval vignette with feather/roundness/highlight preservation, and deterministic grain seeded by `photo_id`
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/effects_calibration_settings.py`, `src/imaging/effects_calibration.py`
+- Unit test file: `tests/test_effects_calibration.py` (≥95% coverage)
+
+### Story 24.7: Interactive Crop Overlay, Spot Heal/Clone, Red Eye, and Local Masks
+
+As a Photographer,
+I want the `Crop`, `Spot`, `Red Eye`, and `Mask` tool buttons to open interactive tools and store non-destructive local edits,
+So that spot removal, red-eye correction, and regional masks (`Brush`, `Linear Gradient`, `Radial Gradient`, `Color Range`, `Luminance Range`) work in Preview and Export.
+
+**Acceptance Criteria:**
+
+**Given** a `HealStroke`, a `RedEyeStroke`, and a `Radial Gradient` `Mask` with local exposure `+50`
+**When** the Photo is saved, reopened, and exported
+**Then** `src/imaging/healing.py`, `src/imaging/red_eye.py`, and `src/imaging/masking.py` apply all three non-destructively
+**And** deleting a stroke or mask restores the underlying pixels while the Original hash stays unchanged
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/local_edits.py`, `src/imaging/healing.py`, `src/imaging/red_eye.py`, `src/imaging/masking.py`
+- Unit test file: `tests/test_local_adjustments.py` (≥95% coverage)
+
+### Story 24.8: Presets with Amount slider, persistent Snapshots & History, Copy/Paste, Soft Proofing, and unified 12-stage pipeline
+
+As a Photographer,
+I want working Develop Presets (with `Amount` scaling), persistent Snapshots and History in SQLite, `Copy...`/`Paste`, `Soft Proofing`, and the unified 12-stage `src/imaging/pipeline.py` wired into both `DevelopPanel` and `exporting/render.py`,
+So that the entire Develop module operates as one cohesive, lossless system.
+
+**Acceptance Criteria:**
+
+**Given** a Photo edited across all Develop sections, a saved Snapshot, and a Preset applied at `Amount = 60%`
+**When** DarkLab restarts and Exports the Photo
+**Then** `photo_history` and `photo_snapshots` restore all History Steps and Snapshots
+**And** `render_photo` and `DevelopPanel` both call `src/imaging/pipeline.py`
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/imaging/pipeline.py`, `src/develop/presets_store.py`, `src/catalog/history_snapshots_store.py`, `src/ui/panels/develop_panel.py`, `src/exporting/render.py`
+- Unit test file: `tests/test_presets_snapshots_pipeline.py` (≥95% coverage)
+
+## Epic 25: Automatic Image Corrections
+
+Feature PRD: `https://github.com/fgalyasz/DarkLab/blob/main/_bmad-output/planning-artifacts/prds/prd-DarkLab-auto-corrections/prd.md` (`FR-94`–`FR-98`, `ADR-12`, `ADR-16`)
+
+A Photographer can apply deterministic, scene-analyzed automatic corrections (Auto Tone, Auto WB, Auto Presence, Auto Lens/CA, and Auto Upright) with one click.
+
+### Story 25.1: Scene-analyzed Auto Tone, Auto Presence, and Auto White Balance
+
+As a Photographer,
+I want one-click `Auto Tone` and `Auto White Balance` that analyze the image histogram and neutral illuminant to set optimal `Exposure`, `Contrast`, `Highlights`, `Shadows`, `Whites`, `Blacks`, `Vibrance`, `Clarity`, `Dehaze`, `Temp`, and `Tint`,
+So that under/over-exposed or color-cast frames balance immediately into editable sliders.
+
+**Acceptance Criteria:**
+
+**Given** a dark, warm-cast image and a bright, clipped-highlight image
+**When** `compute_auto_tone` and `compute_auto_wb` run
+**Then** the dark image gets positive `Exposure`/`Shadows` and cooler `Temp`, while the bright image gets negative `Exposure`/`Highlights`
+**And** all returned values are valid integers within each slider's legal range
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/auto_tone.py`, `src/develop/auto_wb.py`
+- Key functions (≤10 lines each): `compute_auto_tone(pixels, include_presence=True) -> dict[str, int]`, `compute_auto_wb(pixels) -> tuple[int, int]`
+- Unit test file: `tests/test_auto_tone_wb.py` (≥95% coverage)
+
+### Story 25.2: Auto Upright and Auto Horizon geometry (`Auto`, `Level`, `Vertical`, `Full`)
+
+As a Photographer,
+I want the Transform Upright buttons (`Off`, `Auto`, `Level`, `Vertical`, `Full`) to detect horizon tilt and vertical convergence automatically,
+So that crooked horizons and leaning buildings straighten in one click.
+
+**Acceptance Criteria:**
+
+**Given** a synthetic image with a 6-degree tilted horizon and converging vertical lines
+**When** `compute_upright(pixels, mode)` runs for `Level`, `Vertical`, `Full`, and `Auto`
+**Then** `Level` sets `CropAngle` to counteract the tilt, `Vertical` sets `TransformVertical`, `Full` sets both, and `Off` resets upright keys to `0`
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/auto_upright.py`
+- Key functions (≤10 lines each): `detect_horizon_angle(gray) -> int`, `detect_vertical_tilt(gray) -> int`, `compute_upright(pixels, mode) -> dict[str, str]`
+- Unit test file: `tests/test_auto_upright.py` (≥95% coverage)
+
+### Story 25.3: Auto Lens Profile matching and Chromatic Aberration correction
+
+As a Photographer,
+I want DarkLab to match EXIF camera/lens metadata to lens correction parameters and automatically estimate lateral chromatic aberration,
+So that lens distortion, peripheral vignette, and color fringing are corrected automatically.
+
+**Acceptance Criteria:**
+
+**Given** EXIF metadata and an image with red/blue edge fringing
+**When** `compute_auto_lens(exif, pixels)` runs
+**Then** it returns `RemoveCA = "1"`, matched lens profile name (or `"Manual — no matching profile"`), and calculated `LensDistortion` and `LensVignetting` values
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/auto_lens.py`
+- Unit test file: `tests/test_auto_lens.py` (≥95% coverage)
+
+### Story 25.4: Develop, Quick Develop, and Import Auto-Correction UI integration
+
+As a Photographer,
+I want an `Auto` button in the Develop Basic panel, `Auto Tone` / `Auto WB` buttons in Library Quick Develop, and an optional `Apply Auto Tone on Import` checkbox,
+So that automatic corrections are accessible at every stage of my workflow and record a single History Step.
+
+**Acceptance Criteria:**
+
+**Given** a Photo in Develop or Library
+**When** the Photographer clicks `Auto`
+**Then** Auto Tone, Auto WB, and (if enabled) Auto Presence update `develop_settings`, refresh the Preview/Histogram, and record one `"Auto Tone"` History Step
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ui/develop_sections.py`, `src/ui/panels/develop_panel.py`, `src/ui/panels/library_browser_panel.py`
+- Unit test file: `tests/test_auto_correction_ui.py` (≥95% coverage)
+
+## Epic 26: AI Image Correction and Enhancement Suite
+
+Feature PRD: `https://github.com/fgalyasz/DarkLab/blob/main/_bmad-output/planning-artifacts/prds/prd-DarkLab-ai-image-corrections/prd.md` (`FR-99`–`FR-104`, `ADR-13`, `ADR-16`)
+
+A Photographer can apply local-first AI scene corrections, semantic masks, portrait retouching, AI denoise/deblur, automatic dust/blemish healing, and adaptive presets without touching Originals or requiring cloud uploads.
+
+### Story 26.1: Local AI model registry and Semantic Masking (`Subject`, `Sky`, `Background`, `People-Parts`)
+
+As a Photographer,
+I want to generate editable AI semantic masks for `Subject`, `Sky`, `Background`, and `People` parts (`Facial Skin`, `Body Skin`, `Eyes`, `Teeth`, `Lips`, `Hair`, `Clothes`) offline,
+So that local adjustments target semantic regions automatically.
+
+**Acceptance Criteria:**
+
+**Given** a portrait or landscape Photo
+**When** `generate_semantic_mask(pixels, kind)` runs offline
+**Then** it returns a normalized `0.0..1.0` alpha mask encoded into `Masks` in `develop_settings`
+**And** `Background` equals the inverse of `Subject`
+**And** Original bytes remain unchanged
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ai/model_registry.py`, `src/ai/semantic_masks.py`
+- Unit test file: `tests/test_ai_semantic_masks.py` (≥95% coverage)
+
+### Story 26.2: AI Scene-Aware Auto-Develop and Subject Relight
+
+As a Photographer,
+I want `AI Auto-Develop` and `AI Relight` to classify the scene (`Portrait`, `Wedding`, `Landscape`, `Backlit`, `Night`, `Indoor`) and balance subject exposure against the background/sky,
+So that backlit or tricky lighting scenes are corrected intelligently in one step.
+
+**Acceptance Criteria:**
+
+**Given** a backlit portrait where the subject is dark against a bright background
+**When** `compute_ai_auto_develop(pixels, exif, strength=80)` runs
+**Then** `AISceneType` is `"Backlit"` (or `"Portrait"`), global highlights are recovered, and a Subject mask lifts subject exposure/shadows as one `"AI Auto-Develop"` History Step
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/ai/scene_corrector.py`
+- Unit test file: `tests/test_ai_scene_corrector.py` (≥95% coverage)
+
+### Story 26.3: AI Portrait Retouch (Skin Smoothing, Eye Enhancer, Dark Circles, Teeth Whitening)
+
+As a Photographer,
+I want non-destructive AI portrait retouch controls (`AISkinSmooth`, `AISkinTexturePreserve`, `AIEyeClarity`, `AIEyeBrighten`, `AIDarkCircles`, `AITeethWhiten`, `AILipEnhance`),
+So that portraits get natural, texture-preserving skin and eye enhancement inside Develop.
+
+**Acceptance Criteria:**
+
+**Given** a portrait Photo with `AISkinSmooth = 60` and `AIEyeClarity = 50`
+**When** `apply_portrait_retouch` runs in the render pipeline
+**Then** low-frequency skin blotches smooth out while high-frequency pore/hair detail is preserved according to `AISkinTexturePreserve`, and eye/teeth adjustments stay strictly inside their facial region masks
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/ai/portrait_retouch.py`
+- Unit test file: `tests/test_ai_portrait_retouch.py` (≥95% coverage)
+
+### Story 26.4: AI Denoise, AI Sharpen/Deblur Assist, and Sensor Dust/Blemish Auto-Heal
+
+As a Photographer,
+I want `AI Denoise`, `AI Sharpen / Deblur`, and one-click `Auto-Detect Dust & Spots`,
+So that noisy high-ISO shots, slight softness, and sensor dust spots in skies are cleaned non-destructively.
+
+**Acceptance Criteria:**
+
+**Given** a noisy image with simulated sensor dust spots in the sky
+**When** `apply_ai_denoise_sharpen` and `detect_dust_and_blemishes` run
+**Then** chroma/luma noise drops while edges stay crisp, and detected dust spots are returned as editable `HealStroke` entries with clean source patch coordinates
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ai/denoise_sharpen.py`, `src/ai/spot_detector.py`
+- Unit test file: `tests/test_ai_denoise_and_spots.py` (≥95% coverage)
+
+### Story 26.5: AI Adaptive Presets and Develop AI UI panels
+
+As a Photographer,
+I want built-in AI Adaptive Presets (`Adaptive: Portrait Pop`, `Adaptive: Sky Drama`, `Adaptive: Subject Warmth`, `Adaptive: Golden Hour`, `Adaptive: Clean Studio Skin`, `Adaptive: High-ISO Rescue`) and an `AI Corrections & Retouch` collapsible section in Develop,
+So that applying an Adaptive Preset computes fresh masks per Photo and scales with the `Amount` slider.
+
+**Acceptance Criteria:**
+
+**Given** two different Photos and `Adaptive: Sky Drama` applied at `Amount = 120%`
+**When** the preset is applied to each Photo
+**Then** each Photo gets its own freshly segmented Sky mask and scaled tone adjustments as one History Step
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ai/adaptive_presets.py`, `src/ui/develop_sections.py`, `src/ui/panels/develop_panel.py`
+- Unit test file: `tests/test_ai_adaptive_presets.py` (≥95% coverage)
+
+## Epic 27: Configurable Auto-Crop and Smart Framing
+
+Feature PRD: `https://github.com/fgalyasz/DarkLab/blob/main/_bmad-output/planning-artifacts/prds/prd-DarkLab-configurable-auto-crop/prd.md` (`FR-105`–`FR-109`, `ADR-14`, `ADR-16`)
+
+A Photographer can automatically crop Photos based on configurable aspect ratios, composition rules (Rule of Thirds, Golden Ratio, Center, Portrait Headroom, Horizon Split), subject/face margins, and straighten constraints.
+
+### Story 27.1: Auto-Crop configuration model, aspect ratios, and presets
+
+As a Photographer,
+I want to configure Auto-Crop settings (aspect ratio, composition rule, headroom %, padding %, look-room bias, auto-level horizon, never-cut-faces) and choose from built-in or saved presets,
+So that my framing preferences are reusable across shoots.
+
+**Acceptance Criteria:**
+
+**Given** an `AutoCropConfig` saved to the Catalog's `settings.json` (`auto_crop` key)
+**When** it is loaded back
+**Then** all fields round-trip accurately and `parse_aspect_ratio` resolves `"Original"`, `"4:5"`, `"1:1"`, `"3:2"`, `"16:9"`, and custom `"W:H"` ratios
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/auto_crop_config.py`
+- Unit test file: `tests/test_auto_crop_config.py` (≥95% coverage)
+
+### Story 27.2: Subject, Face, Eye-Line, Gaze, and Saliency Anchor Detector
+
+As a Photographer,
+I want DarkLab to detect face boxes, eye-line midpoints, gaze direction, multi-person group bounds, and visual saliency anchors,
+So that Auto-Crop knows where the subject and eyes are located in the frame.
+
+**Acceptance Criteria:**
+
+**Given** a portrait image and a non-portrait object image
+**When** `detect_subject_anchor(pixels)` runs
+**Then** it returns a `SubjectAnchor` with valid `bbox`, `focal_point`, `head_top_y`, `gaze_dir_x`, `face_boxes`, and `horizon_angle`
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/auto_crop_anchors.py`
+- Unit test file: `tests/test_auto_crop_anchors.py` (≥95% coverage)
+
+### Story 27.3: Composition-Rule, Group-Safe, and Straighten-Constrained Crop Solver
+
+As a Photographer,
+I want a deterministic geometry solver that turns `SubjectAnchor` and `AutoCropConfig` into `CropSettings` inside the rotated image's valid inscribed area without cutting through any detected face,
+So that Auto-Crop produces clean, rule-aligned framing with zero black rotation corners.
+
+**Acceptance Criteria:**
+
+**Given** image dimensions, a `SubjectAnchor` with two faces, `angle = 5`, `aspect_ratio = "4:5"`, and `composition_rule = "rule_of_thirds"`
+**When** `solve_auto_crop` runs
+**Then** the returned `CropSettings` lies strictly within the 5-degree rotated inscribed rectangle, encompasses both faces (`never_cut_faces=True`), matches the `4:5` aspect ratio, and places the focal anchor near the upper-third line
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/auto_crop_solver.py`
+- Unit test file: `tests/test_auto_crop_solver.py` (≥95% coverage)
+
+### Story 27.4: Develop Crop panel Auto-Crop controls and History integration
+
+As a Photographer,
+I want an `Auto Crop` button and configuration controls (`Preset`, `Aspect Ratio`, `Rule`, `Headroom %`, `Padding %`, `Auto-Level`) inside the Develop `Crop` section,
+So that one click frames the current Photo and records an `"Auto Crop"` History Step.
+
+**Acceptance Criteria:**
+
+**Given** a Photo in Develop
+**When** the Photographer selects an Auto-Crop preset/rule and clicks `Auto Crop`
+**Then** `CropLeft`, `CropTop`, `CropRight`, `CropBottom`, `CropAngle`, and `CropAspectLock` update immediately in the UI, Preview, Catalog, and History
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ui/develop_sections.py`, `src/ui/crop_binding.py`, `src/ui/panels/develop_panel.py`
+- Unit test file: `tests/test_auto_crop_ui.py` (≥95% coverage)
+
+## Epic 28: Multi-Photo Batch Image Manipulation and Sync
+
+Feature PRD: `https://github.com/fgalyasz/DarkLab/blob/main/_bmad-output/planning-artifacts/prds/prd-DarkLab-multi-photo-manipulation/prd.md` (`FR-110`–`FR-115`, `ADR-15`, `ADR-16`)
+
+A Photographer can apply and synchronize Develop adjustments, relative Quick Develop steps, Match Total Exposure, Auto-Corrections, AI Enhancements, and Configurable Auto-Crop across multiple selected Photos in Library and Develop.
+
+### Story 28.1: Multi-Photo selection (`Primary` + `Secondary`) in Filmstrip and Library Grid
+
+As a Photographer,
+I want `Cmd/Ctrl+Click`, `Shift+Click`, and `Cmd/Ctrl+A` multi-selection in both `GridImageWidget` and `FilmstripWidget` with a distinct Primary (most-selected) Photo,
+So that I can target a set of Photos in Library or Develop.
+
+**Acceptance Criteria:**
+
+**Given** 6 Photos in `GridImageWidget` or `FilmstripWidget`
+**When** the Photographer `Shift+Clicks` a range of 4 Photos and `Ctrl/Cmd+Clicks` a 5th
+**Then** `selected_paths()` returns all 5 paths in order, `primary_path()` returns the active primary Photo, and switching from Library to Develop keeps the same multi-selection
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ui/widgets/grid_image_widget.py`, `src/ui/widgets/filmstrip_widget.py`, `src/ui/main_window.py`
+- Unit test file: `tests/test_multi_selection.py` (≥95% coverage)
+
+### Story 28.2: Selective `Sync...` dialog, `Copy...`/`Paste` groups, and live `Auto-Sync` mode
+
+As a Photographer,
+I want a `Sync...` dialog to choose which of the 14 Develop setting groups to copy from the Primary Photo to all selected Photos, plus a live `Auto-Sync` toggle in Develop,
+So that I can synchronize white balance and color grading across 30 shots without overwriting their individual crops.
+
+**Acceptance Criteria:**
+
+**Given** Primary Photo 1 (`Exposure = 40`, `CropLeft = 15`) and Secondary Photos 2 and 3 (`Exposure = 0`, `CropLeft = 5`)
+**When** `sync_settings_to_photos` runs with `Basic Tone` checked and `Crop` unchecked
+**Then** Photos 2 and 3 have `Exposure = "40"` and keep `CropLeft = "5"`, each gaining one `"Sync Settings"` History Step
+**And** when `Auto-Sync` is checked in Develop, moving a slider on Photo 1 updates only that changed key across Photos 2 and 3 immediately
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/develop/sync_groups.py`, `src/ui/dialogs/sync_settings_dialog.py`, `src/ui/panels/develop_panel.py`
+- Unit test file: `tests/test_sync_settings.py` (≥95% coverage)
+
+### Story 28.3: Relative (Delta) and Absolute Multi-Photo Quick Develop and Match Total Exposure
+
+As a Photographer,
+I want Library `Quick Develop` to apply relative (`Δ`) or absolute adjustments across all selected Photos, and `Match Total Exposure` to normalize brightness across a sequence to match the Primary Photo,
+So that multi-photo tonal adjustments preserve each frame's relative offset or equalize uneven lighting.
+
+**Acceptance Criteria:**
+
+**Given** Photo 1 (`Exposure = 10`) and Photo 2 (`Exposure = -20`) selected in Library
+**When** `apply_relative_delta` applies `{"Exposure": 25}`
+**Then** Photo 1 becomes `35` and Photo 2 becomes `5`, each with a `"Quick Develop"` History Step
+**And** when `match_total_exposure` runs on a sequence with differing brightness, each secondary Photo's `Exposure` is adjusted to match the Primary Photo's target luminance
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/batch_adjust.py`
+- Unit test file: `tests/test_batch_adjust.py` (≥95% coverage)
+
+### Story 28.4: Per-Photo computed Batch Processor (Batch Auto Tone, Auto WB, Auto Upright, Auto-Crop, and AI Corrections)
+
+As a Photographer,
+I want to run `Batch Auto Tone`, `Batch Auto WB`, `Batch Auto Upright`, `Batch Auto-Crop`, `Batch AI Auto-Develop`, `Batch AI Denoise`, or `Batch Adaptive Preset` across N selected Photos so each Photo is analyzed individually off the UI thread,
+So that batch automation adapts to each frame's own subject, horizon, and histogram.
+
+**Acceptance Criteria:**
+
+**Given** 3 selected Photos with different subject positions and brightness, plus 1 Photo with a missing Original
+**When** `run_batch_photo_operation` executes `Batch Auto-Crop` or `Batch Auto Tone`
+**Then** each of the 3 present Photos receives its own individually computed settings and History Step, the 1 missing Original is skipped and named in `BatchResult.skipped`, and Original hashes are unchanged
+
+**Cost-Effective Implementation Blueprint:**
+- Target module: `src/develop/batch_processor.py`
+- Unit test file: `tests/test_batch_processor.py` (≥95% coverage)
+
+### Story 28.5: Library and Develop Batch Manipulation UI, Progress, and Context Menus
+
+As a Photographer,
+I want toolbar and context-menu actions in Library and Develop for `Sync...`, `Auto-Sync`, `Match Total Exposure`, `Batch Auto Tone`, `Batch Auto-Crop`, and `Batch AI Enhance` with a non-blocking progress/cancel bar,
+So that all multi-photo operations are one click away in both modules.
+
+**Acceptance Criteria:**
+
+**Given** multiple Photos selected in `LibraryBrowserPanel` or `DevelopPanel`
+**When** the Photographer triggers any batch action
+**Then** the batch runs via `batch_processor.py`, updates thumbnails/previews upon completion, and shows a completion summary
+
+**Cost-Effective Implementation Blueprint:**
+- Target modules: `src/ui/panels/library_browser_panel.py`, `src/ui/panels/develop_panel.py`
+- Unit test file: `tests/test_multi_photo_ui.py` (≥95% coverage)
+

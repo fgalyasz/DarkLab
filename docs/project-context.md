@@ -25,6 +25,7 @@ DarkLab is a local-first desktop photo application. The product promise is Light
 - No nested classes, nested functions, or nested try/except.
 - New domain modules target at least 95% line coverage, with positive and negative tests.
 - Do not rewrite working UI code only to satisfy style. Apply the constraints to code you touch and to all new domain code.
+- **Model & PDLC optimization:** Always create PRDs, architecture notes, epics/stories, and documentation with the best available frontier planning model capable of the most thorough design. Optimize development for cost-effective models (`Composer 2.5 Fast`) by specifying exact target file paths, function/class signatures, settings/schema keys, and deterministic unit tests in every story.
 
 ## Where the plan lives
 

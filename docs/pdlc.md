@@ -15,13 +15,13 @@ This repo uses the BMad method as the AI-PDLC. Skills run locally in Cursor. The
 ## Pipeline
 
 1. **Classify.** Feature, fix, or chore. A chore stops after the change.
-2. **Plan on the fast path** unless Ferenc asks for the coaching path. Record decisions in the run folder's `.decision-log.md`.
+2. **Plan on the fast path** unless Ferenc asks for the coaching path. Record decisions in the run folder's `.decision-log.md`. **Always use the best available frontier planning model for PRD, architecture, epic/story breakdown, and documentation**, and structure every story so that a **cost-effective model** can implement it in a single deterministic pass.
 3. **PRD.** `_bmad-output/planning-artifacts/prds/prd-DarkLab-<slug>/` with `prd.md`, `.decision-log.md`, and `addendum.md` when technical detail does not belong in the PRD. Stable `FR-` ids. The baseline PRD is `prd-DarkLab-2026-10-10`.
 4. **Architecture when the change needs a new boundary.** Update `_bmad-output/planning-artifacts/architecture.md` instead of inventing a second stack in a story.
-5. **Epic, stories, and the GitHub project.** `gh issue create` an `[EPIC]`, then `[STORY]` sub-issues with `--parent`. Link the PRD from the epic. Add every epic and story to the DarkLab project and set Status to `Todo`. Start of implementation sets `In Progress`. Close sets `Done`. Helper: `./scripts/pdlc-project-item.sh <issue> "Todo"`.
-6. **Build.** English names. New domain logic goes in `src/catalog`, `src/importing`, `src/develop`, `src/exporting`, or `src/imaging`. Widgets call services. Services do not import Qt.
+5. **Epic, stories, and the GitHub project.** `gh issue create` an `[EPIC]`, then `[STORY]` sub-issues with `--parent`. Link the PRD from the epic. Each `[STORY]` body must include a **Cost-Effective Implementation Blueprint** (target files, function signatures ≤10 lines, settings/schema keys, and unit test path) so cost-effective coding models need zero guesswork. Add every epic and story to the DarkLab project and set Status to `Todo`. Start of implementation sets `In Progress`. Close sets `Done`. Helper: `./scripts/pdlc-project-item.sh <issue> "Todo"`.
+6. **Build.** Optimize execution for cost-effective models (`Composer 2.5 Fast`). English names. New domain logic goes in `src/catalog`, `src/importing`, `src/develop`, `src/exporting`, or `src/imaging`. Widgets call services. Services do not import Qt.
 7. **Unit tests.** New domain logic at or above 95% line coverage. Positive and negative cases. No timing-sensitive asserts. `python -m unittest discover -s tests` must pass.
-8. **Review.** Diff against the story's acceptance criteria and the functional requirements it cites. Fix blockers before commit.
+8. **Review.** Load `bmad-code-review` (`.agents/skills/bmad-code-review/SKILL.md` here, or the same path in the TenPrintSoftware checkout). Review the diff against the story's acceptance criteria and the functional requirements it cites. Fix blockers before commit. A chore skips this step.
 9. **Changelog.** User-visible changes get an entry in `CHANGELOG.md`.
 10. **Commit and push.** One commit for the change after tests pass. Push `origin HEAD`. Close the stories and the epic when the epic's stories are done. Set those project items to `Done`.
 

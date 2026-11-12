@@ -566,6 +566,17 @@ The Photographer can review suggested faces, confirm a person, reject a suggesti
 - Rejecting a suggestion keeps it from returning as the same suggestion for that Photo.
 - DarkLab's other Modules run if no face detector is installed. [ASSUMPTION: the first shipments do not bundle a face detector.]
 
+### 4.12 Extended Culling, Full Develop, Auto/AI Corrections, Configurable Auto-Crop, and Multi-Photo Batch
+
+The following feature extensions expand Import, Library, and Develop while preserving Original immutability (`FR-21`, `FR-37`) and offline operation (`NFR-3`):
+
+- **Configurable Auto-Cull (`FR-80`–`FR-85`, `prd-DarkLab-configurable-auto-cull`, Epic 23):** Configurable criteria weights and thresholds (sharpness/focus, eyes open/blink state, smile/expression, exposure health, face framing, and burst/duplicate grouping) in Import (`Assisted Culling`) and Library (`Auto-Cull...`), assigning `Flag`, `Rating`, and `Color Label` marks.
+- **Complete End-to-End Develop Pipeline (`FR-86`–`FR-93`, `prd-DarkLab-complete-develop-pipeline`, Epic 24):** Full persistence, live preview, unified `src/imaging/pipeline.py` rendering, XMP Sidecar round-trip, and History/Snapshots/Presets for every Develop control (`Treatment: Color/B&W`, `Basic`, `Tone Curve` Parametric & RGB/R/G/B Point Curves, 8-band `Color Mixer/HSL`, 4-way `Color Grading` wheels, `Detail` sharpening & noise reduction with 1:1 view, `Lens Corrections`, `Transform` with `Constrain Crop`, `Effects` vignette & grain, `Calibration`, `Masks`, `Spot Heal/Clone`, `Red Eye`, and `Soft Proofing`).
+- **Automatic Image Corrections (`FR-94`–`FR-98`, `prd-DarkLab-auto-corrections`, Epic 25):** Deterministic scene-analyzed `Auto Tone`, `Auto White Balance`, `Auto Presence`, `Auto Lens/Chromatic Aberration`, and `Auto Upright / Horizon` (`Auto`, `Level`, `Vertical`, `Full`) writing editable `develop_settings`.
+- **AI Image Correction & Enhancement Suite (`FR-99`–`FR-104`, `prd-DarkLab-ai-image-corrections`, Epic 26):** Local-first `AI Scene-Aware Auto-Develop & Relight`, `AI Semantic Masks` (`Subject`, `Sky`, `Background`, and `People` parts: skin, eyes, teeth, lips, hair, clothes), `AI Portrait Retouch` (frequency-separation skin smoothing, eye enhancer, dark-circle reduction, teeth whitening), `AI Denoise & Sharpen/Deblur`, `AI Sensor Dust & Blemish Auto-Heal`, and `AI Adaptive Presets` with `Amount` scaling.
+- **Configurable Auto-Crop (`FR-105`–`FR-109`, `prd-DarkLab-configurable-auto-crop`, Epic 27):** Rule-driven and subject/face/horizon-aware automatic cropping with configurable aspect ratios, composition rules (`Rule of Thirds`, `Golden Ratio`, `Center`, `Portrait Headroom`, `Horizon Split`), headroom/padding/look-room bias, group-face safety guard (`never_cut_faces`), and straighten-constrained inscribed bounds.
+- **Multi-Photo Batch Image Manipulation (`FR-110`–`FR-115`, `prd-DarkLab-multi-photo-manipulation`, Epic 28):** Multi-selection across Library Grid and Develop Filmstrip (`Primary` + `Secondary` selection), selective `Sync...` dialog (14 parameter groups), live `Auto-Sync` toggle, relative (delta) and absolute multi-photo `Quick Develop`, `Match Total Exposure`, and per-photo computed Batch Auto-Corrections, Batch Auto-Crop, and Batch AI Corrections.
+
 ## 5. Non-Goals (Explicit)
 
 - Reading or writing a Lightroom `.lrcat` catalog, or converting Adobe develop XML as a compatibility promise.
