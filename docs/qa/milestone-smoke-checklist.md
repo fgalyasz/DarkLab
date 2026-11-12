@@ -19,3 +19,13 @@ CI runs this on macOS, Linux, and Windows before the unit suite in `.github/work
 3. Optional: `python -m unittest tests.test_milestone_shoot` with `QT_QPA_PLATFORM=offscreen`.
 
 The script does not start the GUI and does not change Originals on disk.
+
+## SM-1 fixture scale (PRD gate)
+
+From the repo root:
+
+```bash
+python scripts/sm1_fixture_shoot.py
+```
+
+Runs **200** synthetic JPEG originals through Import → cull (every fifth picked) → basic tone on picks → Export, and checks original hashes and ADR-2 layout. CI uses `tests.test_sm1_fixture_shoot` with a smaller count for speed.
