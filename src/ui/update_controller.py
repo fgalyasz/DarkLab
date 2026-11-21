@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import platform
 import tempfile
 from pathlib import Path
 
