@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=ensure_cloudflare_token.sh
+source "${ROOT}/scripts/ensure_cloudflare_token.sh"
 export PYTHONPATH="${ROOT}"
 PROJECT="darklab"
 SITE_HOST="darklab-a4o.pages.dev"
@@ -28,8 +30,5 @@ else
 fi
 rm -rf "${GATEWAY}"
 python3 "${ROOT}/scripts/render_gateway_site.py" "${version}" "${GATEWAY}"
-if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-  unset CLOUDFLARE_API_TOKEN
-fi
 npx --yes wrangler@4.127.1 pages deploy "${GATEWAY}" --project-name "${PROJECT}"
 echo "OK: https://${SITE_HOST} version ${version}"
