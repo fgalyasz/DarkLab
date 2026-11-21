@@ -101,6 +101,30 @@ class DensityWidgetTests(unittest.TestCase):
         self.assertTrue(all(gap <= 1 for gap in gaps), gaps)
         host.close()
 
+    def test_collapsing_groups_lifts_sections_below(self) -> None:
+        from PyQt6.QtWidgets import QLabel
+        from src.ui.panels.develop_panel import DevelopPanel
+        from src.ui.widgets.collapsible_section import CollapsibleSection
+
+        panel = DevelopPanel()
+        panel.show()
+        panel.resize(1200, 900)
+        APP.processEvents()
+        sections = {
+            section.header().findChild(QLabel, "panelTitle").text(): section
+            for section in panel.findChildren(CollapsibleSection)
+        }
+        groups = {group.title(): group for group in panel.findChildren(DevelopGroup)}
+        before = sections["Tone Curve"].y()
+        groups["Tone"].toggle()
+        groups["Presence"].toggle()
+        APP.processEvents()
+        after = sections["Tone Curve"].y()
+        self.assertLess(after, before)
+        self.assertGreaterEqual(before - after, 80)
+        panel._cancel_load()
+        panel.close()
+
     def test_three_color_wheels_fit_grading_column(self) -> None:
         row = QWidget()
         total = 0

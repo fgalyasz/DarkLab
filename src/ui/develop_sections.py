@@ -232,7 +232,7 @@ def _layout(panel: QWidget) -> QVBoxLayout:
 
 
 def _finish(layout: QVBoxLayout) -> None:
-    layout.addStretch(1)
+    return
 
 
 def _group(title: str) -> tuple[QWidget, QVBoxLayout]:

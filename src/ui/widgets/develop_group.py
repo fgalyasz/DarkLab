@@ -88,7 +88,16 @@ class DevelopGroup(QWidget):
         self._header.setStyleSheet(self._header_style())
         self._apply_size_policy()
         self.toggled.emit(self._expanded)
-        self.updateGeometry()
+        self._relayout_ancestors()
+
+    def _relayout_ancestors(self) -> None:
+        widget = self
+        while widget is not None:
+            widget.updateGeometry()
+            layout = widget.layout()
+            if layout is not None:
+                layout.activate()
+            widget = widget.parentWidget()
 
     def _header_style(self) -> str:
         radius = Density.PANEL_CORNER_RADIUS_PX

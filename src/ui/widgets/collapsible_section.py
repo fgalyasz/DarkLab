@@ -109,7 +109,7 @@ class CollapsibleSection(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._header)
-        layout.addWidget(self._content, 1)
+        layout.addWidget(self._content, 1 if self._fill else 0)
         self.setStyleSheet(_section_style())
 
     def _apply_expanded(self) -> None:
@@ -117,13 +117,22 @@ class CollapsibleSection(QWidget):
         self._header.set_expanded(self._expanded)
         self._apply_size_policy()
         self.toggled.emit(self._expanded)
-        self.updateGeometry()
+        self._relayout_ancestors()
+
+    def _relayout_ancestors(self) -> None:
+        widget = self
+        while widget is not None:
+            widget.updateGeometry()
+            layout = widget.layout()
+            if layout is not None:
+                layout.activate()
+            widget = widget.parentWidget()
 
     def _apply_size_policy(self) -> None:
         if self._expanded:
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
-            vertical = QSizePolicy.Policy.Expanding if self._fill else QSizePolicy.Policy.Preferred
+            vertical = QSizePolicy.Policy.Expanding if self._fill else QSizePolicy.Policy.Maximum
             self.setSizePolicy(QSizePolicy.Policy.Preferred, vertical)
             return
         self.setMinimumHeight(HEADER_HEIGHT)
