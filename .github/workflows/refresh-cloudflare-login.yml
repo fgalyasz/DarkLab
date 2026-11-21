@@ -1,0 +1,60 @@
+name: Refresh Cloudflare login
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-cloudflare-login
+  cancel-in-progress: true
+
+jobs:
+  login:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fgalyasz/TenPrintSoftware
+          path: TenPrintSoftware
+          ref: main
+          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: TenPrintSoftware/package-lock.json
+      - name: Install wrangler
+        working-directory: TenPrintSoftware
+        run: npm ci
+      - name: Device login (approve in browser)
+        env:
+          WRANGLER_BIN: ${{ github.workspace }}/TenPrintSoftware/node_modules/.bin/wrangler
+        run: |
+          set -euo pipefail
+          chmod +x scripts/ci_device_login.sh scripts/ci_persist_wrangler.sh
+          unset CLOUDFLARE_API_TOKEN || true
+          ./scripts/ci_device_login.sh
+      - name: Persist login to GitHub secrets
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./scripts/ci_persist_wrangler.sh force
+      - name: Verify whoami
+        env:
+          WRANGLER_BIN: ${{ github.workspace }}/TenPrintSoftware/node_modules/.bin/wrangler
+        run: |
+          set -euo pipefail
+          unset CLOUDFLARE_API_TOKEN || true
+          env -u CLOUDFLARE_API_TOKEN "${WRANGLER_BIN}" whoami
+      - name: Publish company catalogue
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run "Publish company catalogue" --repo fgalyasz/DarkLab --ref main
+          echo "Dispatched Publish company catalogue."
