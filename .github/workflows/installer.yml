@@ -192,6 +192,14 @@ jobs:
         with:
           name: DarkLab-windows-x64
           path: DarkLab/dist
+      - name: Publish GitHub release
+        working-directory: DarkLab
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/ci_publish_github_release.sh
+          ./scripts/ci_publish_github_release.sh
       - name: Restore Cloudflare login
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
@@ -209,11 +217,11 @@ jobs:
       - name: Deploy product site
         working-directory: DarkLab
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          chmod +x ./scripts/deploy_site.sh ./scripts/ensure_cloudflare_token.sh
+          chmod +x ./scripts/deploy_site.sh ./scripts/ensure_cloudflare_token.sh ./scripts/ci_publish_github_release.sh
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
             unset CLOUDFLARE_API_TOKEN
           fi
