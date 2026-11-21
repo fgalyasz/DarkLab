@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
 - Classic density pass: compact 11px chrome, tighter module bar and panel headers, single-line Develop sliders, elided Library metadata, smaller color-grading wheels, quieter placeholder modules, and near-square 2px controls so the shell reads closer to Lightroom Classic without claiming Adobe pixel chrome.
 - Develop sub-panels (Treatment, WB, Tone, Presence, and the other group blocks) collapse like Lightroom Classic, and panel chrome uses a 10px corner radius.
 - Develop slider rows stay fixed-height and groups pack tightly when collapsed, so rounded shells no longer open airy gaps between controls.
+=======
+- DarkLab checks GitHub Releases for a newer Community build on startup and from Help → Check for Updates. The photographer can update, dismiss, or skip a version; the matching installer downloads and installs (macOS copies into `/Applications/DarkLab.app`; Windows/Linux replace the packaged folder). HTTPS uses the bundled `certifi` CA store so packaged macOS builds verify GitHub. Catalog work still runs offline when the check fails (story 18.3).
+>>>>>>> origin/main
 - `scripts/sm1_fixture_shoot.py` and `src/smoke/sm1_fixture_shoot.py` prove the PRD SM-1 path at 200 synthetic JPEG originals (Import → cull → basic Develop → Export) with unchanged original hashes; unit tests use a smaller count for CI speed.
 - GitHub Releases and the product gateway list macOS, Linux, and Windows installers when CI publishes a build (story 18.5).
 - CI runs the milestone one-shoot smoke script on macOS, Linux, and Windows before the unit suite, proving Import → Flag → basic tone → Export and ADR-2 catalog layout on each OS (story 18.2).

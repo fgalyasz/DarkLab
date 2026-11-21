@@ -39,7 +39,9 @@ from src.ui.dialogs.preview_cache_dialog import PreviewCacheDialog
 from src.ui.optimize_idle import OptimizeIdleWatcher
 from src.ui.optimize_on_quit import optimize_on_quit
 from src.ui.dialogs.select_catalog_dialog import SelectCatalogDialog
+from src.ui.update_controller import UpdateController
 from src.ui.widgets.module_bar import ModuleBar
+from src.release import versioning
 
 
 def _text_setting(value: object) -> str:
@@ -69,10 +71,12 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_panels()
         self._optimize_idle = OptimizeIdleWatcher(self)
+        self._updates = UpdateController(self, self.config_manager)
         self._apply_initial_state()
         self._auto_save_timer = QTimer()
         self._auto_save_timer.timeout.connect(self._auto_save_state)
         self._auto_save_timer.start(5000)  # Save every 5 seconds
+        QTimer.singleShot(2500, self._updates.schedule_startup_check)
     
     def _setup_window(self) -> None:
         """Setup main window properties"""
@@ -126,7 +130,14 @@ class MainWindow(QMainWindow):
         exit_action = file_menu.addAction("E&xit")
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
-    
+
+        help_menu = QMenu("&Help", self)
+        menu_bar.addMenu(help_menu)
+        check_updates = help_menu.addAction("Check for &Updates...")
+        check_updates.triggered.connect(self._check_for_updates)
+        about_action = help_menu.addAction("&About DarkLab")
+        about_action.triggered.connect(self._show_about)
+
     def _setup_module_bar(self) -> None:
         modules = (
             ("library", "Library"),
@@ -204,6 +215,20 @@ class MainWindow(QMainWindow):
         # Use Ctrl+Shift+I on all platforms (PyQt handles Cmd+Shift on Mac automatically)
         shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
         shortcut.activated.connect(self._open_import_dialog)
+
+    def _check_for_updates(self) -> None:
+        self._updates.check_for_updates(quiet=False)
+
+    def _show_about(self) -> None:
+        try:
+            version = versioning.app_version()
+        except (OSError, ValueError):
+            version = "unknown"
+        QMessageBox.about(
+            self,
+            "About DarkLab",
+            f"DarkLab {version}\nCommunity edition\nhttps://github.com/fgalyasz/DarkLab",
+        )
 
     def _setup_catalog_actions(self, file_menu: QMenu) -> None:
         new_catalog = file_menu.addAction("New &Catalog...")

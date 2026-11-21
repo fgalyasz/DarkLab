@@ -5,3 +5,4 @@ opencv-python>=4.10.0.84
 rawpy>=0.18.1
 exifread>=3.0.0
 pyexiv2>=2.14.0
+certifi>=2024.0.0
