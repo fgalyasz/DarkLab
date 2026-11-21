@@ -98,7 +98,7 @@ class DensityWidgetTests(unittest.TestCase):
         APP.processEvents()
         ordered = [groups[name] for name in ("Treatment", "WB", "Tone", "Presence")]
         gaps = [ordered[i + 1].y() - (ordered[i].y() + ordered[i].height()) for i in range(3)]
-        self.assertTrue(all(gap <= 2 for gap in gaps), gaps)
+        self.assertTrue(all(gap <= 1 for gap in gaps), gaps)
         host.close()
 
     def test_three_color_wheels_fit_grading_column(self) -> None:

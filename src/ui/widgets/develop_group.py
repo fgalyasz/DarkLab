@@ -98,7 +98,11 @@ class DevelopGroup(QWidget):
                 f" border-top-left-radius: {radius}px; border-top-right-radius: {radius}px;"
                 " border-bottom-left-radius: 0px; border-bottom-right-radius: 0px; }"
             )
-        return f"#developHeading {{ border-radius: {radius}px; border-bottom: none; }}"
+        collapsed = max(4, radius // 2)
+        return (
+            "#developHeading {"
+            f" border-radius: {collapsed}px; border-bottom: none; }"
+        )
 
     def _apply_size_policy(self) -> None:
         if self._expanded:
