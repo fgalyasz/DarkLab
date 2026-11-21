@@ -219,6 +219,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           chmod +x ./scripts/deploy_site.sh ./scripts/ensure_cloudflare_token.sh ./scripts/ci_publish_github_release.sh
@@ -230,6 +231,7 @@ jobs:
         working-directory: TenPrintSoftware
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           npm run sync:versions
