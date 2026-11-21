@@ -54,9 +54,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            unset CLOUDFLARE_API_TOKEN
-          fi
+          # Restore path already written; export oauth as API token for wrangler CI.
+          for candidate in \
+            "${HOME}/.config/.wrangler/config/default.toml" \
+            "${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          do
+            if [[ -s "${candidate}" && -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+              token="$(python3 -c "import re,pathlib,sys; t=pathlib.Path(sys.argv[1]).read_text(); m=re.search(r'oauth_token\\s*=\\s*\\\"([^\\\"]+)\\\"', t); print(m.group(1) if m else '')" "${candidate}")"
+              if [[ -n "${token}" ]]; then export CLOUDFLARE_API_TOKEN="${token}"; fi
+            fi
+          done
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then unset CLOUDFLARE_API_TOKEN || true; fi
           npm run sync:versions
           npm run build
           npm run deploy

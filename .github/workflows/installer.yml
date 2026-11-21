@@ -116,8 +116,11 @@ jobs:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
           WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
         run: |
-          mkdir -p "${HOME}/Library/Preferences/.wrangler/config"
-          cfg="${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          set -euo pipefail
+          mac_dir="${HOME}/Library/Preferences/.wrangler/config"
+          linux_dir="${HOME}/.config/.wrangler/config"
+          mkdir -p "${mac_dir}" "${linux_dir}"
+          cfg="${mac_dir}/default.toml"
           enc="$(gh variable get WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware 2>/dev/null || true)"
           if [[ -n "${enc}" ]] && printf '%s' "${enc}" | PASS="${GH_TOKEN}" openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:PASS > "${cfg}" 2>/dev/null && [[ -s "${cfg}" ]]; then
             echo "Restored live Cloudflare login from WRANGLER_CONFIG_ENC"
@@ -127,27 +130,31 @@ jobs:
           fi
           if [[ -s "${cfg}" ]]; then
             chmod 600 "${cfg}"
+            cp "${cfg}" "${linux_dir}/default.toml"
+            chmod 600 "${linux_dir}/default.toml"
             cp "${cfg}" "${RUNNER_TEMP}/wrangler-before.toml"
           fi
       - name: Deploy product site
+        id: deploy_product
+        continue-on-error: true
         working-directory: DarkLab
         env:
           GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            unset CLOUDFLARE_API_TOKEN
-          fi
-          chmod +x ./scripts/deploy_site.sh
+          set -euo pipefail
+          chmod +x ./scripts/deploy_site.sh ./scripts/ensure_cloudflare_token.sh
+          # shellcheck source=scripts/ensure_cloudflare_token.sh
+          source ./scripts/ensure_cloudflare_token.sh
           ./scripts/deploy_site.sh
       - name: Publish company catalogue
         working-directory: TenPrintSoftware
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            unset CLOUDFLARE_API_TOKEN
-          fi
+          set -euo pipefail
+          # shellcheck source=../DarkLab/scripts/ensure_cloudflare_token.sh
+          source ../DarkLab/scripts/ensure_cloudflare_token.sh
           npm run sync:versions
           npm run build
           npm run deploy
