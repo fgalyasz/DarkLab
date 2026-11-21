@@ -8,6 +8,7 @@ from src.startup import launch_is_allowed, log_directory, log_file
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_DMG = ROOT / "scripts" / "build_dmg.sh"
 BUILD_LINUX = ROOT / "scripts" / "build_linux.sh"
+DMG_BACKGROUND = ROOT / "dmg_background.png"
 
 
 def _expected_log_root(home: Path) -> Path:
@@ -46,6 +47,17 @@ class StartupTests(unittest.TestCase):
     def test_build_dmg_collects_pyexiv2_binaries(self) -> None:
         script = BUILD_DMG.read_text(encoding="utf-8")
         self.assertIn("--collect-binaries pyexiv2", script)
+
+    def test_build_dmg_links_applications(self) -> None:
+        script = BUILD_DMG.read_text(encoding="utf-8")
+        self.assertIn('ln -s "/Applications"', script)
+        self.assertIn('item "Applications"', script)
+
+    def test_build_dmg_uses_tenprint_background(self) -> None:
+        script = BUILD_DMG.read_text(encoding="utf-8")
+        self.assertIn("dmg_background.png", script)
+        self.assertIn(".background/background.png", script)
+        self.assertTrue(DMG_BACKGROUND.is_file())
 
     def test_build_linux_collects_pyexiv2_binaries(self) -> None:
         script = BUILD_LINUX.read_text(encoding="utf-8")
