@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: installer-${{ github.repository }}
@@ -134,6 +135,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            unset CLOUDFLARE_API_TOKEN
+          fi
           chmod +x ./scripts/deploy_site.sh
           ./scripts/deploy_site.sh
       - name: Publish company catalogue
@@ -141,6 +145,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            unset CLOUDFLARE_API_TOKEN
+          fi
           npm run sync:versions
           npm run build
           npm run deploy
@@ -172,12 +179,44 @@ jobs:
           path: DarkLab/dist/DarkLab.dmg
           if-no-files-found: error
       - name: Notify on first success or recovery
+        if: success()
         working-directory: TenPrintSoftware
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           CONTACT_TO: ${{ secrets.CONTACT_TO }}
           CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
+          NOTIFY_MODE: success
+          WORKFLOW_FILE: installer.yml
+          WORKFLOW_NAME: Installer image
         run: |
-          RELEASE_VERSION="$(tr -d ' \t\n\r' < ../DarkLab/docs/version.txt 2>/dev/null || true)" \
+          set -euo pipefail
+          export RELEASE_VERSION
+          RELEASE_VERSION="$(tr -d ' \t\n\r' < ../DarkLab/docs/version.txt 2>/dev/null || true)"
+          if [[ -f scripts/notify_ci_status.mjs ]]; then
+            node scripts/notify_ci_status.mjs
+          else
             node scripts/notify_installer_recovery.mjs
+          fi
+      - name: Notify on failure
+        if: failure()
+        working-directory: TenPrintSoftware
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CONTACT_TO: ${{ secrets.CONTACT_TO }}
+          CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
+          NOTIFY_MODE: failure
+          WORKFLOW_FILE: installer.yml
+          WORKFLOW_NAME: Installer image
+        run: |
+          set -euo pipefail
+          export RELEASE_VERSION
+          RELEASE_VERSION="$(tr -d ' \t\n\r' < ../DarkLab/docs/version.txt 2>/dev/null || true)"
+          if [[ -f scripts/notify_ci_status.mjs ]]; then
+            node scripts/notify_ci_status.mjs
+          else
+            echo "notify_ci_status.mjs not on TenPrintSoftware main yet; skip failure issue/email."
+          fi

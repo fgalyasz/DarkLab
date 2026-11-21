@@ -28,5 +28,8 @@ else
 fi
 rm -rf "${GATEWAY}"
 python3 "${ROOT}/scripts/render_gateway_site.py" "${version}" "${GATEWAY}"
-npx --yes wrangler pages deploy "${GATEWAY}" --project-name "${PROJECT}"
+if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  unset CLOUDFLARE_API_TOKEN
+fi
+npx --yes wrangler@4.127.1 pages deploy "${GATEWAY}" --project-name "${PROJECT}"
 echo "OK: https://${SITE_HOST} version ${version}"
