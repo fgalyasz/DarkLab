@@ -2,14 +2,16 @@ from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPolygon
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-HEADER_HEIGHT = 26
+from src.ui.density import Density
+
+HEADER_HEIGHT = Density.PANEL_HEADER_HEIGHT
 
 
 class DisclosureTriangle(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._expanded = True
-        self.setFixedSize(16, 16)
+        self.setFixedSize(14, 14)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
     def set_expanded(self, expanded: bool) -> None:
@@ -26,8 +28,8 @@ class DisclosureTriangle(QWidget):
 
     def _points(self) -> list[QPoint]:
         if self._expanded:
-            return [QPoint(2, 5), QPoint(14, 5), QPoint(8, 12)]
-        return [QPoint(5, 2), QPoint(5, 14), QPoint(12, 8)]
+            return [QPoint(2, 4), QPoint(12, 4), QPoint(7, 10)]
+        return [QPoint(4, 2), QPoint(4, 12), QPoint(10, 7)]
 
 
 class PanelHeader(QWidget):
@@ -51,8 +53,8 @@ class PanelHeader(QWidget):
 
     def _build(self, title: str, arrow_on_left: bool) -> None:
         row = QHBoxLayout(self)
-        row.setContentsMargins(8, 0, 8, 0)
-        row.setSpacing(6)
+        row.setContentsMargins(6, 0, 6, 0)
+        row.setSpacing(4)
         title_label = self._title(title)
         if arrow_on_left:
             row.addWidget(self._triangle)
@@ -67,13 +69,21 @@ class PanelHeader(QWidget):
         label = QLabel(title)
         label.setObjectName("panelTitle")
         label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        label.setWordWrap(False)
         return label
 
 
 class CollapsibleSection(QWidget):
     toggled = pyqtSignal(bool)
 
-    def __init__(self, title: str, content: QWidget, expanded: bool = True, arrow_on_left: bool = False, fill: bool = False) -> None:
+    def __init__(
+        self,
+        title: str,
+        content: QWidget,
+        expanded: bool = True,
+        arrow_on_left: bool = False,
+        fill: bool = False,
+    ) -> None:
         super().__init__()
         self._content = content
         self._expanded = expanded
@@ -145,6 +155,7 @@ def _section_style() -> str:
         "#panelHeader {"
         " background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(82, 82, 82), stop:1 rgb(54, 54, 54));"
         " border-top: 1px solid rgb(104, 104, 104); border-bottom: 1px solid rgb(16, 16, 16); }"
-        "#panelTitle { color: rgb(236, 236, 236); font-size: 12px; font-weight: 600; background: transparent; }"
+        f"#panelTitle {{ color: rgb(236, 236, 236); font-size: {Density.HEADER_PX}px;"
+        " font-weight: 600; background: transparent; }"
         "#panelColumn { background-color: rgb(45, 45, 45); }"
     )

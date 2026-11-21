@@ -279,7 +279,7 @@ class CollapsibleGroupBox(QWidget):
             self.title_label.setStyleSheet(f"""
                 QLabel {{
                     color: white;
-                    font-size: 14px;
+                    font-size: 11px;
                     font-weight: bold;
                     background-color: {lighter_color_str};
                     padding: 5px;
@@ -1197,7 +1197,7 @@ class LibraryPanel(BasePanel):
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(10, 5, 10, 5)
         title_label = QLabel(title)
-        title_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold; background-color: transparent; border: none;")
+        title_label.setStyleSheet("color: white; font-size: 11px; font-weight: bold; background-color: transparent; border: none;")
         header_layout.addWidget(title_label)
         header_layout.addStretch()
         return header_widget
@@ -1231,7 +1231,7 @@ class LibraryPanel(BasePanel):
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(10, 5, 10, 5)
         title_label = QLabel(title)
-        title_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold; background-color: transparent; border: none;")
+        title_label.setStyleSheet("color: white; font-size: 11px; font-weight: bold; background-color: transparent; border: none;")
         toggle_button = QPushButton("▼" if is_expanded else "▶")
         toggle_button.setFixedSize(20, 20)
         toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1452,7 +1452,7 @@ class LibraryPanel(BasePanel):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         summary_label = QLabel("Import selected images")
-        summary_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold; border: none;")
+        summary_label.setStyleSheet("color: white; font-size: 11px; font-weight: bold; border: none;")
         summary_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.import_status_label = QLabel("Select images and choose a target folder.")
         self.import_status_label.setWordWrap(True)
@@ -1461,11 +1461,11 @@ class LibraryPanel(BasePanel):
         button_layout.setSpacing(8)
         self.import_button = self._create_small_button("Import", self._start_import)
         self.import_button.setStyleSheet(
-            "QPushButton { background-color: rgb(0, 122, 255); color: white; border: none; border-radius: 6px; padding: 8px 12px; font-weight: bold; } QPushButton:hover { background-color: rgb(20, 142, 255); } QPushButton:disabled { background-color: rgb(80, 80, 86); color: rgb(170, 170, 175); }"
+            "QPushButton { background-color: rgb(210, 210, 210); color: rgb(20, 20, 20); border: none; border-radius: 2px; padding: 3px 10px; font-size: 11px; font-weight: bold; } QPushButton:hover { background-color: rgb(230, 230, 230); } QPushButton:disabled { background-color: rgb(80, 80, 86); color: rgb(170, 170, 175); }"
         )
         self.import_cancel_button = self._create_small_button("Cancel", self._cancel_import)
         self.import_cancel_button.setStyleSheet(
-            "QPushButton { background-color: rgb(92, 92, 98); color: white; border: none; border-radius: 6px; padding: 8px 12px; font-weight: bold; } QPushButton:hover { background-color: rgb(108, 108, 114); } QPushButton:disabled { background-color: rgb(70, 70, 76); color: rgb(150, 150, 155); }"
+            "QPushButton { background-color: rgb(72, 72, 78); color: white; border: none; border-radius: 2px; padding: 3px 10px; font-size: 11px; font-weight: bold; } QPushButton:hover { background-color: rgb(88, 88, 94); } QPushButton:disabled { background-color: rgb(70, 70, 76); color: rgb(150, 150, 155); }"
         )
         self.import_cancel_button.setEnabled(False)
         button_layout.addWidget(self.import_button)
@@ -1510,7 +1510,7 @@ class LibraryPanel(BasePanel):
             token_button.setCursor(Qt.CursorShape.PointingHandCursor)
             token_button.clicked.connect(lambda _checked=False, value=token: self._insert_template_token(value))
             token_button.setStyleSheet(
-                "QPushButton { color: rgb(250, 250, 252); background-color: rgb(86, 96, 112); border: 1px solid rgb(140, 150, 168); border-radius: 10px; padding: 4px 10px; font-size: 11px; font-weight: bold; text-align: center; } "
+                "QPushButton { color: rgb(250, 250, 252); background-color: rgb(86, 96, 112); border: 1px solid rgb(140, 150, 168); border-radius: 2px; padding: 2px 8px; font-size: 10px; font-weight: bold; text-align: center; } "
                 "QPushButton:hover { background-color: rgb(104, 116, 136); border: 1px solid rgb(176, 186, 204); }"
             )
             description_label = QLabel(description)
@@ -1531,7 +1531,7 @@ class LibraryPanel(BasePanel):
         widget.setMinimumHeight(28)
         widget.setView(QListView())
         widget.setStyleSheet(
-            "QComboBox { color: white; background-color: rgb(68, 68, 74); border: 1px solid rgb(90, 90, 96); border-radius: 6px; padding: 4px 30px 4px 8px; font-size: 12px; min-height: 28px; } "
+            "QComboBox { color: white; background-color: rgb(68, 68, 74); border: 1px solid rgb(90, 90, 96); border-radius: 2px; padding: 2px 24px 2px 6px; font-size: 11px; min-height: 20px; } "
             "QComboBox:hover { background-color: rgb(78, 78, 84); border: 1px solid rgb(0, 122, 255); } "
             "QComboBox:focus { border: 1px solid rgb(0, 122, 255); } "
             "QComboBox:disabled { color: rgb(160, 160, 165); background-color: rgb(55, 55, 60); border: 1px solid rgb(75, 75, 80); } "

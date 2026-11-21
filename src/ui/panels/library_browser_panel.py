@@ -7,8 +7,8 @@ from PyQt6.QtCore import QEvent, QObject, Qt, QThreadPool, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-    QListWidget, QMessageBox, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget,
-    QTextEdit, QVBoxLayout, QWidget,
+    QListWidget, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSlider, QSplitter,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from src.config.config_manager import ConfigManager
@@ -27,6 +27,7 @@ from src.ui.dialogs.removal_choice_dialog import RemovalChoiceDialog
 from src.ui.dialogs.import_dialog import ImageDiscoveryThread, ImageProcessorRunnable
 from src.ui.import_summary import byte_total, format_byte_count
 from src.ui.library_catalog import filter_paths, keyword_tokens
+from src.ui.density import Density
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.preview_image import tone_image
@@ -179,10 +180,13 @@ class LibraryBrowserPanel(BasePanel):
 
     def _filter_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(36)
+        bar.setFixedHeight(Density.FILTER_BAR_HEIGHT)
         row = QHBoxLayout(bar)
-        row.setContentsMargins(8, 4, 8, 4)
-        row.addWidget(QLabel("Library Filter"))
+        row.setContentsMargins(6, 2, 6, 2)
+        row.setSpacing(4)
+        filter_label = QLabel("Filter")
+        filter_label.setStyleSheet(f"font-size: {Density.BODY_PX}px;")
+        row.addWidget(filter_label)
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Filename")
         self.filter_edit.textChanged.connect(self._refresh_grid)
@@ -269,24 +273,28 @@ class LibraryBrowserPanel(BasePanel):
 
     def _keyword_editor(self) -> QTextEdit:
         self.keywords_edit = QTextEdit()
-        self.keywords_edit.setFixedHeight(70)
+        self.keywords_edit.setFixedHeight(56)
         self.keywords_edit.setPlaceholderText("Keywords, one per line")
         self.keywords_edit.textChanged.connect(self._on_keywords_changed)
         return self.keywords_edit
 
     def _keyword_list(self) -> QListWidget:
         self.keyword_list = QListWidget()
-        self.keyword_list.setFixedHeight(90)
+        self.keyword_list.setFixedHeight(72)
         return self.keyword_list
 
     def _metadata_form(self) -> QWidget:
         panel = QWidget()
         form = QFormLayout(panel)
-        self.meta_name = QLabel("-")
-        self.meta_folder = QLabel("-")
-        self.meta_dimensions = QLabel("-")
-        self.meta_size = QLabel("-")
-        self.meta_modified = QLabel("-")
+        form.setContentsMargins(6, 4, 6, 4)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(2)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.meta_name = _meta_value()
+        self.meta_folder = _meta_value()
+        self.meta_dimensions = _meta_value()
+        self.meta_size = _meta_value()
+        self.meta_modified = _meta_value()
         form.addRow("File Name", self.meta_name)
         form.addRow("Folder", self.meta_folder)
         form.addRow("Dimensions", self.meta_dimensions)
@@ -296,7 +304,7 @@ class LibraryBrowserPanel(BasePanel):
 
     def _comments_editor(self) -> QTextEdit:
         self.comments_edit = QTextEdit()
-        self.comments_edit.setFixedHeight(70)
+        self.comments_edit.setFixedHeight(56)
         self.comments_edit.textChanged.connect(self._remember_notes)
         return self.comments_edit
 
@@ -307,9 +315,10 @@ class LibraryBrowserPanel(BasePanel):
 
     def _build_toolbar(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(40)
+        bar.setFixedHeight(Density.TOOL_BAR_HEIGHT)
         row = QHBoxLayout(bar)
-        row.setContentsMargins(8, 4, 8, 4)
+        row.setContentsMargins(6, 2, 6, 2)
+        row.setSpacing(4)
         self.status_label = QLabel("0 photos")
         row.addWidget(self.status_label)
         row.addWidget(self._tool_button("Import...", self._request_import))
@@ -580,10 +589,10 @@ class LibraryBrowserPanel(BasePanel):
         self._load_notes("")
 
     def _clear_file_fields(self) -> None:
-        self.meta_name.setText("-")
-        self.meta_folder.setText("-")
-        self.meta_size.setText("-")
-        self.meta_modified.setText("-")
+        _set_meta(self.meta_name, "-")
+        _set_meta(self.meta_folder, "-")
+        _set_meta(self.meta_size, "-")
+        _set_meta(self.meta_modified, "-")
 
     def _image_for(self, path: Path) -> QImage:
         pixmap = self._thumbs.get(path)
@@ -595,7 +604,7 @@ class LibraryBrowserPanel(BasePanel):
         self._navigator_image = image
         self._paint_previews()
         if self._selected:
-            self.meta_dimensions.setText(f"{image.width()} x {image.height()}")
+            _set_meta(self.meta_dimensions, f"{image.width()} x {image.height()}")
 
     def _apply_tone(self) -> None:
         self._exposure = self.exposure_slider.value()
@@ -614,10 +623,10 @@ class LibraryBrowserPanel(BasePanel):
             _show_pixmap(self.loupe, image, self.loupe.size())
 
     def _fill_metadata(self, path: Path) -> None:
-        self.meta_name.setText(path.name)
-        self.meta_folder.setText(str(path.parent))
-        self.meta_size.setText(format_byte_count(byte_total([path])))
-        self.meta_modified.setText(_modified_text(path))
+        _set_meta(self.meta_name, path.name)
+        _set_meta(self.meta_folder, str(path.parent))
+        _set_meta(self.meta_size, format_byte_count(byte_total([path])))
+        _set_meta(self.meta_modified, _modified_text(path))
 
     def _load_notes(self, path: str) -> None:
         self._notes_locked = True
@@ -774,6 +783,21 @@ def _modified_text(path: Path) -> str:
     except OSError:
         return ""
     return stamp.strftime("%Y-%m-%d %H:%M")
+
+
+def _meta_value() -> QLabel:
+    label = QLabel("-")
+    label.setWordWrap(False)
+    label.setMinimumWidth(48)
+    label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    label.setStyleSheet(f"font-size: {Density.BODY_PX}px; color: rgb(220, 220, 220);")
+    return label
+
+
+def _set_meta(label: QLabel, text: str) -> None:
+    label.setToolTip(text)
+    width = max(48, label.width() or 140)
+    label.setText(label.fontMetrics().elidedText(text, Qt.TextElideMode.ElideMiddle, width))
 
 
 def _library_style() -> str:

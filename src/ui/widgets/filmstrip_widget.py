@@ -4,7 +4,7 @@ from PyQt6.QtCore import QAbstractListModel, QModelIndex, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import QListView
 
-CELL_SIZE = QSize(110, 88)
+CELL_SIZE = QSize(100, 78)
 NEARBY_CELLS = 8
 
 
@@ -76,9 +76,9 @@ class FilmstripWidget(QListView):
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setUniformItemSizes(True)
         self.setGridSize(CELL_SIZE)
-        self.setIconSize(QSize(96, 64))
-        self.setSpacing(6)
-        self.setFixedHeight(104)
+        self.setIconSize(QSize(88, 58))
+        self.setSpacing(4)
+        self.setFixedHeight(92)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.selectionModel().currentChanged.connect(self._emit_current)

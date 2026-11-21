@@ -1,6 +1,8 @@
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSlider, QWidget
 
+from src.ui.density import Density
+
 
 class SliderRow(QWidget):
     changed = pyqtSignal(int)
@@ -30,21 +32,31 @@ class SliderRow(QWidget):
     def _build(self, title: str, minimum: int, maximum: int, value: int) -> None:
         row = QHBoxLayout(self)
         row.setContentsMargins(4, 0, 4, 0)
-        row.setSpacing(6)
+        row.setSpacing(4)
         row.addWidget(self._caption(title))
         self._slider.setRange(minimum, maximum)
         self._slider.setValue(value)
+        self._slider.setFixedHeight(16)
         self._slider.valueChanged.connect(self._on_changed)
         row.addWidget(self._slider, 1)
-        self._value_label.setMinimumWidth(42)
-        self._value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._configure_value_label()
         row.addWidget(self._value_label)
         self._show_value(value)
 
     def _caption(self, title: str) -> QLabel:
         label = QLabel(title)
-        label.setMinimumWidth(72)
+        label.setObjectName("sliderCaption")
+        label.setFixedWidth(Density.SLIDER_CAPTION_WIDTH)
+        label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        _apply_single_line(label)
         return label
+
+    def _configure_value_label(self) -> None:
+        self._value_label.setObjectName("sliderValue")
+        self._value_label.setFixedWidth(Density.SLIDER_VALUE_WIDTH)
+        self._value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        _apply_single_line(self._value_label)
 
     def _on_changed(self, value: int) -> None:
         self._show_value(value)
@@ -55,3 +67,8 @@ class SliderRow(QWidget):
             self._value_label.setText(f"{value / 100:+.2f}")
             return
         self._value_label.setText(str(value))
+
+
+def _apply_single_line(label: QLabel) -> None:
+    label.setWordWrap(False)
+    label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)

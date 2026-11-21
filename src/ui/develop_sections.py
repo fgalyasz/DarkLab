@@ -212,8 +212,8 @@ def _panel() -> QWidget:
 
 def _layout(panel: QWidget) -> QVBoxLayout:
     layout = QVBoxLayout(panel)
-    layout.setContentsMargins(4, 6, 4, 8)
-    layout.setSpacing(8)
+    layout.setContentsMargins(3, 4, 3, 6)
+    layout.setSpacing(5)
     return layout
 
 
@@ -231,8 +231,8 @@ def _group_body(outer: QVBoxLayout) -> QVBoxLayout:
     body = QWidget()
     body.setObjectName("developGroupBody")
     layout = QVBoxLayout(body)
-    layout.setContentsMargins(6, 6, 6, 7)
-    layout.setSpacing(2)
+    layout.setContentsMargins(5, 4, 5, 5)
+    layout.setSpacing(1)
     outer.addWidget(body)
     return layout
 

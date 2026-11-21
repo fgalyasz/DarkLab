@@ -26,6 +26,7 @@ from src.develop.tone_settings import TONE_KEYS, decode_tone
 from src.develop.tone_store import load_tone, save_tone
 from src.imaging.lru_cache import LruCache
 from src.ui.dialogs.import_dialog import ImageProcessorRunnable
+from src.ui.density import Density
 from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.crop_binding import CropBinding
@@ -106,11 +107,11 @@ class DevelopPanel(BasePanel):
     def _center_column(self) -> QWidget:
         column = QWidget()
         layout = QVBoxLayout(column)
-        layout.setContentsMargins(12, 8, 12, 4)
-        layout.setSpacing(4)
-        self.filename_label = _info_label(16)
-        self.exposure_label = _info_label(11)
-        self.marks_label = _info_label(12)
+        layout.setContentsMargins(8, 4, 8, 2)
+        layout.setSpacing(2)
+        self.filename_label = _info_label(Density.TITLE_PX)
+        self.exposure_label = _info_label(Density.HINT_PX)
+        self.marks_label = _info_label(Density.BODY_PX)
         self.preview = _empty_preview("Select a photo.")
         layout.addWidget(self.filename_label)
         layout.addWidget(self.exposure_label)
@@ -164,6 +165,7 @@ class DevelopPanel(BasePanel):
         bar = QWidget()
         row = QHBoxLayout(bar)
         row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
         row.addWidget(QPushButton("Copy..."))
         row.addWidget(QPushButton("Paste"))
         self.compare_button = QPushButton("Before/After")
@@ -182,6 +184,8 @@ class DevelopPanel(BasePanel):
     def _previous_reset(self) -> QWidget:
         bar = QWidget()
         row = QHBoxLayout(bar)
+        row.setContentsMargins(4, 4, 4, 4)
+        row.setSpacing(4)
         previous = QPushButton("Previous")
         reset = QPushButton("Reset")
         previous.clicked.connect(self._restore_previous)
@@ -444,6 +448,7 @@ def _empty_preview(text: str) -> QLabel:
 
 def _info_label(size: int) -> QLabel:
     label = QLabel("")
+    label.setWordWrap(False)
     label.setStyleSheet(f"color: rgb(230, 230, 230); font-size: {size}px; background: transparent;")
     return label
 
@@ -461,9 +466,12 @@ def _first_visible(paths: list[Path]) -> Path | None:
 def _tool_row() -> QWidget:
     row = QWidget()
     layout = QHBoxLayout(row)
-    layout.setContentsMargins(6, 4, 6, 4)
+    layout.setContentsMargins(4, 2, 4, 2)
+    layout.setSpacing(3)
     for title in ("Crop", "Spot", "Red Eye", "Mask"):
-        layout.addWidget(QPushButton(title))
+        button = QPushButton(title)
+        button.setMinimumWidth(0)
+        layout.addWidget(button)
     return row
 
 
