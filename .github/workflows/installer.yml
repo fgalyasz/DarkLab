@@ -144,20 +144,16 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./scripts/deploy_site.sh ./scripts/ensure_cloudflare_token.sh
-          # shellcheck source=scripts/ensure_cloudflare_token.sh
-          source ./scripts/ensure_cloudflare_token.sh
-          ./scripts/deploy_site.sh
+          env -u CLOUDFLARE_API_TOKEN ./scripts/deploy_site.sh
       - name: Publish company catalogue
         working-directory: TenPrintSoftware
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          # shellcheck source=../DarkLab/scripts/ensure_cloudflare_token.sh
-          source ../DarkLab/scripts/ensure_cloudflare_token.sh
-          npm run sync:versions
-          npm run build
-          npm run deploy
+          env -u CLOUDFLARE_API_TOKEN npm run sync:versions
+          env -u CLOUDFLARE_API_TOKEN npm run build
+          env -u CLOUDFLARE_API_TOKEN npm run deploy
       - name: Persist refreshed Cloudflare login
         if: always()
         env:

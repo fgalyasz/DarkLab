@@ -2,14 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=ensure_cloudflare_token.sh
-source "${ROOT}/scripts/ensure_cloudflare_token.sh"
 export PYTHONPATH="${ROOT}"
 PROJECT="darklab"
 SITE_HOST="darklab-a4o.pages.dev"
 PACKAGE_NAME="DarkLab"
 GATEWAY="${ROOT}/.gateway-site"
 version="$(tr -d ' \t\n\r' < "${ROOT}/docs/version.txt")"
+WRANGLER_BIN="${ROOT}/../TenPrintSoftware/node_modules/.bin/wrangler"
 
 [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 tag="v${version}"
@@ -30,5 +29,9 @@ else
 fi
 rm -rf "${GATEWAY}"
 python3 "${ROOT}/scripts/render_gateway_site.py" "${version}" "${GATEWAY}"
-npx --yes wrangler@4.127.1 pages deploy "${GATEWAY}" --project-name "${PROJECT}"
+if [[ -x "${WRANGLER_BIN}" ]]; then
+  env -u CLOUDFLARE_API_TOKEN "${WRANGLER_BIN}" pages deploy "${GATEWAY}" --project-name "${PROJECT}"
+else
+  env -u CLOUDFLARE_API_TOKEN npx --yes wrangler@4.127.1 pages deploy "${GATEWAY}" --project-name "${PROJECT}"
+fi
 echo "OK: https://${SITE_HOST} version ${version}"
