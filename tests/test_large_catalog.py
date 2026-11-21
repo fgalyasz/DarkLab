@@ -211,6 +211,17 @@ class FilmstripModelTests(unittest.TestCase):
         self.assertGreaterEqual(strip.gridSize().height(), strip.iconSize().height())
         self.assertGreaterEqual(strip.height(), strip.gridSize().height())
 
+    def test_filmstrip_cells_keep_usable_width(self) -> None:
+        strip = FilmstripWidget()
+        strip.resize(900, strip.height())
+        strip.set_photos([Path(f"/x/{index}.jpg") for index in range(6)])
+        for index in range(6):
+            strip.set_thumbnail(Path(f"/x/{index}.jpg"), QPixmap(400, 600))
+        rect = strip.visualRect(strip.model().index(0))
+        self.assertGreaterEqual(rect.width(), 80)
+        self.assertGreaterEqual(rect.height(), 70)
+        self.assertEqual(rect.width(), strip.gridSize().width())
+
 
 class LargeCatalogPanelTests(unittest.TestCase):
     @classmethod

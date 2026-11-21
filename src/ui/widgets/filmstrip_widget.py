@@ -1,13 +1,16 @@
 from pathlib import Path
 
-from PyQt6.QtCore import QAbstractListModel, QModelIndex, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import QListView
+from PyQt6.QtCore import QAbstractListModel, QModelIndex, QRect, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PyQt6.QtWidgets import QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 CELL_SIZE = QSize(108, 88)
 ICON_SIZE = QSize(96, 72)
 STRIP_HEIGHT = 110
 NEARBY_CELLS = 8
+PAD = 4
+SELECTED = QColor(0, 122, 255)
+HOVER = QColor(70, 70, 70)
 
 
 class FilmstripModel(QAbstractListModel):
@@ -30,6 +33,8 @@ class FilmstripModel(QAbstractListModel):
             return path.name
         if role == Qt.ItemDataRole.DecorationRole:
             return self._icons.get(path, QIcon())
+        if role == Qt.ItemDataRole.SizeHintRole:
+            return CELL_SIZE
         if role == Qt.ItemDataRole.UserRole:
             return str(path)
         return None
@@ -56,13 +61,24 @@ class FilmstripModel(QAbstractListModel):
         row = self.row_of(path)
         if row is None:
             return
-        self._icons[path] = QIcon(pixmap)
+        self._icons[path] = QIcon(_fit_icon(pixmap))
         self.dataChanged.emit(self.index(row), self.index(row), [Qt.ItemDataRole.DecorationRole])
 
     def clear_icon(self, path: Path) -> None:
         row = self.row_of(path)
         if row is not None and self._icons.pop(path, None) is not None:
             self.dataChanged.emit(self.index(row), self.index(row), [Qt.ItemDataRole.DecorationRole])
+
+
+class FilmstripDelegate(QStyledItemDelegate):
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        return CELL_SIZE
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        painter.save()
+        _paint_cell_background(painter, option)
+        _paint_thumbnail(painter, option.rect, index)
+        painter.restore()
 
 
 class FilmstripWidget(QListView):
@@ -73,19 +89,21 @@ class FilmstripWidget(QListView):
         super().__init__()
         self._model = FilmstripModel()
         self.setModel(self._model)
+        self.setItemDelegate(FilmstripDelegate(self))
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setFlow(QListView.Flow.LeftToRight)
         self.setWrapping(False)
         self.setMovement(QListView.Movement.Static)
-        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.setResizeMode(QListView.ResizeMode.Fixed)
         self.setUniformItemSizes(True)
         self.setGridSize(CELL_SIZE)
         self.setIconSize(ICON_SIZE)
-        self.setSpacing(4)
+        self.setSpacing(6)
         self.setFixedHeight(STRIP_HEIGHT)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setWordWrap(False)
+        self.setSelectionRectVisible(False)
         self.selectionModel().currentChanged.connect(self._emit_current)
         self.horizontalScrollBar().valueChanged.connect(self.request_nearby_thumbnails)
 
@@ -127,3 +145,45 @@ class FilmstripWidget(QListView):
     def _emit_current(self, current: QModelIndex, _previous: QModelIndex) -> None:
         if current.isValid():
             self.photo_selected.emit(str(current.data(Qt.ItemDataRole.UserRole)))
+
+
+def _fit_icon(pixmap: QPixmap) -> QPixmap:
+    return pixmap.scaled(
+        ICON_SIZE,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+
+
+def _decoration_pixmap(index: QModelIndex) -> QPixmap | None:
+    icon = index.data(Qt.ItemDataRole.DecorationRole)
+    if not isinstance(icon, QIcon) or icon.isNull():
+        return None
+    pixmap = icon.pixmap(ICON_SIZE)
+    return None if pixmap.isNull() else pixmap
+
+
+def _paint_thumbnail(painter: QPainter, rect: QRect, index: QModelIndex) -> None:
+    pixmap = _decoration_pixmap(index)
+    if pixmap is None:
+        return
+    target = rect.adjusted(PAD, PAD, -PAD, -PAD)
+    scaled = pixmap.scaled(
+        target.size(),
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    painter.drawPixmap(_centered(target, scaled.size()), scaled)
+
+
+def _paint_cell_background(painter: QPainter, option: QStyleOptionViewItem) -> None:
+    if option.state & QStyle.StateFlag.State_Selected:
+        painter.fillRect(option.rect, SELECTED)
+    elif option.state & QStyle.StateFlag.State_MouseOver:
+        painter.fillRect(option.rect, HOVER)
+
+
+def _centered(area: QRect, size: QSize) -> QRect:
+    x = area.x() + (area.width() - size.width()) // 2
+    y = area.y() + (area.height() - size.height()) // 2
+    return QRect(x, y, size.width(), size.height())
