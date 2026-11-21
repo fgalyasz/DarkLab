@@ -148,7 +148,7 @@ class StyleSheet:
             background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(82, 82, 82), stop:1 rgb(54, 54, 54));
             border-top: 1px solid rgb(104, 104, 104);
             border-bottom: 1px solid rgb(16, 16, 16);
-            border-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
+            border-radius: 0px;
         }}
         #panelTitle {{
             color: rgb(236, 236, 236);

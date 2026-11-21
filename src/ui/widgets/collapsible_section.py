@@ -152,12 +152,11 @@ class PanelColumn(QWidget):
 
 
 def _section_style() -> str:
-    radius = Density.PANEL_CORNER_RADIUS_PX
     return (
         "#panelHeader {"
         " background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(82, 82, 82), stop:1 rgb(54, 54, 54));"
-        f" border-top: 1px solid rgb(104, 104, 104); border-bottom: 1px solid rgb(16, 16, 16);"
-        f" border-radius: {radius}px; }}"
+        " border-top: 1px solid rgb(104, 104, 104); border-bottom: 1px solid rgb(16, 16, 16);"
+        " border-radius: 0px; }"
         f"#panelTitle {{ color: rgb(236, 236, 236); font-size: {Density.HEADER_PX}px;"
         " font-weight: 600; background: transparent; }"
         "#panelColumn { background-color: rgb(45, 45, 45); }"
