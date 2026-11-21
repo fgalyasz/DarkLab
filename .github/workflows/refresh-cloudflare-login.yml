@@ -41,6 +41,7 @@ jobs:
       - name: Persist login to GitHub secrets
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          WRANGLER_BIN: ${{ github.workspace }}/TenPrintSoftware/node_modules/.bin/wrangler
         run: |
           set -euo pipefail
           ./scripts/ci_persist_wrangler.sh force

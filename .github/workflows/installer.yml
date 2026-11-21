@@ -241,9 +241,10 @@ jobs:
             npm run deploy
           fi
       - name: Persist refreshed Cloudflare login
-        if: always()
+        if: success()
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          WRANGLER_BIN: ${{ github.workspace }}/TenPrintSoftware/node_modules/.bin/wrangler
         run: |
           set -euo pipefail
           chmod +x DarkLab/scripts/ci_persist_wrangler.sh
@@ -288,15 +289,15 @@ jobs:
           if [[ -f scripts/notify_ci_status.mjs ]]; then
             node scripts/notify_ci_status.mjs
           fi
-      - name: Auto-fallback Publish company catalogue
+      - name: Request Cloudflare login refresh on auth failure
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::ACTIONS_PUSH_TOKEN missing; cannot dispatch catalogue publish."
+            echo "::error::ACTIONS_PUSH_TOKEN missing; cannot dispatch login refresh."
             exit 1
           fi
-          gh workflow run "Publish company catalogue" --repo fgalyasz/DarkLab --ref main
-          echo "Dispatched Publish company catalogue as automatic fallback."
+          gh workflow run "Refresh Cloudflare login" --repo fgalyasz/DarkLab --ref main
+          echo "::warning::Dispatched Refresh Cloudflare login. Approve the device code in that run, then catalogue publish starts automatically."
