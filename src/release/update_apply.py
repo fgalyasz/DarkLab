@@ -58,7 +58,7 @@ def mac_install_destination() -> str:
 
 
 def _posix(path: Path | str) -> str:
-    return Path(path).as_posix()
+    return str(path).replace("\\", "/")
 
 
 def _apply_macos(archive: Path) -> None:
