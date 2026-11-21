@@ -71,12 +71,13 @@ class DevelopGroup(QWidget):
         self._apply_expanded()
 
     def _configure_body_layout(self) -> None:
-        self._body_layout.setContentsMargins(5, 4, 5, 5)
-        self._body_layout.setSpacing(1)
+        self._body.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self._body_layout.setContentsMargins(4, 1, 4, 2)
+        self._body_layout.setSpacing(0)
 
     def _build(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(1, 1, 1, 1)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._header)
         layout.addWidget(self._body)
@@ -102,7 +103,7 @@ class DevelopGroup(QWidget):
     def _apply_size_policy(self) -> None:
         if self._expanded:
             self.setMaximumHeight(16777215)
-            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
             return
-        self.setMaximumHeight(Density.GROUP_HEADER_HEIGHT + 2)
+        self.setMaximumHeight(Density.GROUP_HEADER_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)

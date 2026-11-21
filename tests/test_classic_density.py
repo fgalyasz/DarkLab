@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
 from src.ui.density import Density
 from src.ui.panels.base_panel import BasePanel
@@ -11,7 +11,7 @@ from src.ui.panels.library_browser_panel import LibraryBrowserPanel
 from src.ui.themes import StyleSheet
 from src.ui.widgets.color_wheel import ColorWheel
 from src.ui.widgets.module_bar import ModuleBar
-from src.ui.widgets.slider_row import SliderRow
+from src.ui.widgets.slider_row import SLIDER_ROW_HEIGHT, SliderRow
 from src.ui.develop_sections import DevelopControls, basic_panel
 from src.ui.widgets.collapsible_section import HEADER_HEIGHT, CollapsibleSection
 from src.ui.widgets.develop_group import DevelopGroup
@@ -56,10 +56,49 @@ class DensityWidgetTests(unittest.TestCase):
         row.setParent(host)
         host.show()
         APP.processEvents()
-        self.assertLessEqual(row.height(), 24)
+        self.assertEqual(row.height(), SLIDER_ROW_HEIGHT)
         caption = row.layout().itemAt(0).widget()
         self.assertFalse(caption.wordWrap())
         self.assertEqual(caption.width(), Density.SLIDER_CAPTION_WIDTH)
+        host.close()
+
+    def test_tone_sliders_stay_dense_inside_a_tall_group(self) -> None:
+        group = DevelopGroup("Tone")
+        for index in range(6):
+            group.body_layout().addWidget(SliderRow(f"S{index}", -100, 100, 0))
+        host = QWidget()
+        host.setFixedSize(280, 600)
+        wrap = QVBoxLayout(host)
+        wrap.setContentsMargins(0, 0, 0, 0)
+        wrap.addWidget(group)
+        wrap.addStretch(1)
+        host.show()
+        APP.processEvents()
+        rows = group.findChildren(SliderRow)
+        self.assertEqual(len(rows), 6)
+        self.assertTrue(all(row.height() == SLIDER_ROW_HEIGHT for row in rows))
+        top = rows[0].mapTo(group, rows[0].rect().topLeft()).y()
+        bottom = rows[-1].mapTo(group, rows[-1].rect().bottomLeft()).y()
+        self.assertLessEqual(bottom - top + 1, 6 * SLIDER_ROW_HEIGHT + 4)
+        host.close()
+
+    def test_collapsed_groups_keep_tight_gaps(self) -> None:
+        panel = basic_panel(DevelopControls())
+        host = QWidget()
+        host.setFixedSize(300, 700)
+        wrap = QVBoxLayout(host)
+        wrap.setContentsMargins(0, 0, 0, 0)
+        wrap.addWidget(panel)
+        wrap.addStretch(1)
+        host.show()
+        APP.processEvents()
+        groups = {group.title(): group for group in panel.findChildren(DevelopGroup)}
+        groups["Tone"].toggle()
+        groups["Presence"].toggle()
+        APP.processEvents()
+        ordered = [groups[name] for name in ("Treatment", "WB", "Tone", "Presence")]
+        gaps = [ordered[i + 1].y() - (ordered[i].y() + ordered[i].height()) for i in range(3)]
+        self.assertTrue(all(gap <= 2 for gap in gaps), gaps)
         host.close()
 
     def test_three_color_wheels_fit_grading_column(self) -> None:

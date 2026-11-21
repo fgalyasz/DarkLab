@@ -1,7 +1,9 @@
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSlider, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QWidget
 
 from src.ui.density import Density
+
+SLIDER_ROW_HEIGHT = 16
 
 
 class SliderRow(QWidget):
@@ -10,6 +12,8 @@ class SliderRow(QWidget):
     def __init__(self, title: str, minimum: int, maximum: int, value: int = 0) -> None:
         super().__init__()
         self.setObjectName("developRow")
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(SLIDER_ROW_HEIGHT)
         self.title = title
         self._default = value
         self._slider = QSlider(Qt.Orientation.Horizontal)
@@ -31,12 +35,13 @@ class SliderRow(QWidget):
 
     def _build(self, title: str, minimum: int, maximum: int, value: int) -> None:
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 0, 4, 0)
+        row.setContentsMargins(2, 0, 2, 0)
         row.setSpacing(4)
         row.addWidget(self._caption(title))
         self._slider.setRange(minimum, maximum)
         self._slider.setValue(value)
-        self._slider.setFixedHeight(16)
+        self._slider.setFixedHeight(12)
+        self._slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._slider.valueChanged.connect(self._on_changed)
         row.addWidget(self._slider, 1)
         self._configure_value_label()
