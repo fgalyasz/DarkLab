@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "*/15 * * * *"
+  workflow_run:
+    workflows: ["Installer image"]
+    types: [completed]
 
 permissions:
   contents: write
