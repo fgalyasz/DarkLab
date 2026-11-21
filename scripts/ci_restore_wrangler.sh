@@ -82,10 +82,8 @@ if [[ "${ok}" -eq 1 ]]; then
 fi
 
 echo "::error::Cloudflare wrangler oauth expired and could not be refreshed."
-echo "::error::This is the same login the morning catalogue deploy used; refresh tokens were not persisted after that run."
-echo "::error::Recovery (no API-token UI needed):"
-echo "::error::  1) npx wrangler@4.127.1 login"
-echo "::error::  2) bash DarkLab/scripts/push_cloudflare_login.sh"
-echo "::error::  3) DarkLab Actions → Publish company catalogue → Run workflow"
+echo "::error::Run DarkLab Actions → Refresh Cloudflare login → Run workflow,"
+echo "::error::open the device URL from the job log, enter the code, approve."
+echo "::error::That workflow persists oauth and dispatches catalogue publish."
 cat /tmp/wrangler-whoami.txt >&2 || true
 exit 1
