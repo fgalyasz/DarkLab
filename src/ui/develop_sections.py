@@ -213,8 +213,8 @@ def _panel() -> QWidget:
 
 def _layout(panel: QWidget) -> QVBoxLayout:
     layout = QVBoxLayout(panel)
-    layout.setContentsMargins(3, 4, 3, 6)
-    layout.setSpacing(5)
+    layout.setContentsMargins(4, 6, 4, 8)
+    layout.setSpacing(6)
     return layout
 
 

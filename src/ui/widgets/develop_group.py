@@ -12,6 +12,7 @@ class DevelopGroupHeader(QWidget):
         super().__init__()
         self._triangle = DisclosureTriangle()
         self.setObjectName("developHeading")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedHeight(Density.GROUP_HEADER_HEIGHT)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._build(title)
@@ -45,6 +46,7 @@ class DevelopGroup(QWidget):
     def __init__(self, title: str, expanded: bool = True) -> None:
         super().__init__()
         self.setObjectName("developGroup")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._expanded = expanded
         self._header = DevelopGroupHeader(title)
         self._body = QWidget()
@@ -82,9 +84,20 @@ class DevelopGroup(QWidget):
     def _apply_expanded(self) -> None:
         self._body.setVisible(self._expanded)
         self._header.set_expanded(self._expanded)
+        self._header.setStyleSheet(self._header_style())
         self._apply_size_policy()
         self.toggled.emit(self._expanded)
         self.updateGeometry()
+
+    def _header_style(self) -> str:
+        radius = Density.PANEL_CORNER_RADIUS_PX
+        if self._expanded:
+            return (
+                "#developHeading {"
+                f" border-top-left-radius: {radius}px; border-top-right-radius: {radius}px;"
+                " border-bottom-left-radius: 0px; border-bottom-right-radius: 0px; }"
+            )
+        return f"#developHeading {{ border-radius: {radius}px; border-bottom: none; }}"
 
     def _apply_size_policy(self) -> None:
         if self._expanded:

@@ -158,19 +158,17 @@ class StyleSheet:
         }}
         #developRow, #developGroupBody {{ background: transparent; }}
         #developGroup {{
-            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(30, 30, 30), stop:1 rgb(40, 40, 40));
-            border-top: 1px solid rgb(6, 6, 6);
-            border-left: 1px solid rgb(10, 10, 10);
-            border-right: 1px solid rgb(62, 62, 62);
+            background-color: rgb(36, 36, 36);
+            border: 1px solid rgb(18, 18, 18);
             border-bottom: 2px solid rgb(8, 8, 8);
             border-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
         }}
         #developHeading {{
-            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(92, 92, 92), stop:1 rgb(56, 56, 56));
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(98, 98, 98), stop:1 rgb(58, 58, 58));
             color: rgb(242, 242, 242);
             font-size: {Density.HINT_PX}px;
             font-weight: 600;
-            border-top: 1px solid rgb(124, 124, 124);
+            border: none;
             border-bottom: 1px solid rgb(12, 12, 12);
             border-top-left-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
             border-top-right-radius: {Density.PANEL_CORNER_RADIUS_PX}px;

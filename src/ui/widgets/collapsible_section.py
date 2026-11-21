@@ -41,6 +41,7 @@ class PanelHeader(QWidget):
         self.setFixedHeight(HEADER_HEIGHT)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setObjectName("panelHeader")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._build(title, arrow_on_left)
 
     def set_expanded(self, expanded: bool) -> None:

@@ -88,7 +88,7 @@ class DensityWidgetTests(unittest.TestCase):
 
     def test_stylesheet_uses_panel_corner_radius(self) -> None:
         self.assertIn(f"border-radius: {Density.PANEL_CORNER_RADIUS_PX}px", StyleSheet.LIGHTROOM)
-        self.assertGreaterEqual(Density.PANEL_CORNER_RADIUS_PX, 6)
+        self.assertGreaterEqual(Density.PANEL_CORNER_RADIUS_PX, 8)
 
     def test_develop_groups_collapse_like_classic(self) -> None:
         group = DevelopGroup("Tone")

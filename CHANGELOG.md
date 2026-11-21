@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Classic density pass: compact 11px chrome, tighter module bar and panel headers, single-line Develop sliders, elided Library metadata, smaller color-grading wheels, quieter placeholder modules, and near-square 2px controls so the shell reads closer to Lightroom Classic without claiming Adobe pixel chrome.
-- Develop sub-panels (Treatment, WB, Tone, Presence, and the other group blocks) collapse like Lightroom Classic, and panel chrome uses an 8px corner radius.
+- Develop sub-panels (Treatment, WB, Tone, Presence, and the other group blocks) collapse like Lightroom Classic, and panel chrome uses a 10px corner radius.
 - `scripts/sm1_fixture_shoot.py` and `src/smoke/sm1_fixture_shoot.py` prove the PRD SM-1 path at 200 synthetic JPEG originals (Import → cull → basic Develop → Export) with unchanged original hashes; unit tests use a smaller count for CI speed.
 - GitHub Releases and the product gateway list macOS, Linux, and Windows installers when CI publishes a build (story 18.5).
 - CI runs the milestone one-shoot smoke script on macOS, Linux, and Windows before the unit suite, proving Import → Flag → basic tone → Export and ADR-2 catalog layout on each OS (story 18.2).
