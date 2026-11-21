@@ -162,10 +162,15 @@ class UpdateApplyTests(unittest.TestCase):
             42,
             Path("/tmp/DarkLab.dmg"),
             Path("/tmp/mnt"),
-            Path("/Applications/DarkLab.app"),
+            update_apply.mac_install_destination(),
         )
         self.assertIn("/Applications/DarkLab.app", script)
+        self.assertNotIn("\\Applications", script)
         self.assertIn("DarkLab.app", script)
+
+    def test_mac_destination_is_posix(self) -> None:
+        self.assertEqual(update_apply.mac_install_destination(), "/Applications/DarkLab.app")
+        self.assertEqual(update_apply._posix(r"C:\tmp\mnt"), "C:/tmp/mnt")
 
     def test_apply_linux_writes_script(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

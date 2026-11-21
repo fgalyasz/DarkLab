@@ -13,7 +13,7 @@ from webbrowser import open as open_url
 
 from src.release.update_check import UpdateCheckError
 
-MAC_APPLICATIONS_APP = Path("/Applications/DarkLab.app")
+MAC_APPLICATIONS_APP = "/Applications/DarkLab.app"
 MAC_APP_NAME = "DarkLab.app"
 
 
@@ -53,8 +53,12 @@ def open_download_page(url: str) -> None:
     open_url(url)
 
 
-def mac_install_destination() -> Path:
+def mac_install_destination() -> str:
     return MAC_APPLICATIONS_APP
+
+
+def _posix(path: Path | str) -> str:
+    return Path(path).as_posix()
 
 
 def _apply_macos(archive: Path) -> None:
@@ -103,18 +107,21 @@ def _bundle_payload(staging: Path, executable_name: str) -> Path:
     raise UpdateCheckError(f"Update archive missing {executable_name}")
 
 
-def _macos_script(pid: int, dmg: Path, mount: Path, destination: Path) -> str:
+def _macos_script(pid: int, dmg: Path, mount: Path, destination: str) -> str:
+    dmg_path = _posix(dmg)
+    mount_path = _posix(mount)
+    target = _posix(destination)
     return (
         f"#!/bin/bash\n"
         f"set -euo pipefail\n"
         f"while kill -0 {pid} 2>/dev/null; do sleep 1; done\n"
-        f"hdiutil attach \"{dmg}\" -nobrowse -readonly -mountpoint \"{mount}\"\n"
-        f"APP=\"$(find \"{mount}\" -maxdepth 2 -name '{MAC_APP_NAME}' -type d | head -n 1)\"\n"
-        f"if [[ -z \"$APP\" ]]; then hdiutil detach \"{mount}\" -quiet || true; exit 1; fi\n"
-        f"rm -rf \"{destination}\"\n"
-        f"ditto \"$APP\" \"{destination}\"\n"
-        f"hdiutil detach \"{mount}\" -quiet || true\n"
-        f"open \"{destination}\"\n"
+        f"hdiutil attach \"{dmg_path}\" -nobrowse -readonly -mountpoint \"{mount_path}\"\n"
+        f"APP=\"$(find \"{mount_path}\" -maxdepth 2 -name '{MAC_APP_NAME}' -type d | head -n 1)\"\n"
+        f"if [[ -z \"$APP\" ]]; then hdiutil detach \"{mount_path}\" -quiet || true; exit 1; fi\n"
+        f"rm -rf \"{target}\"\n"
+        f"ditto \"$APP\" \"{target}\"\n"
+        f"hdiutil detach \"{mount_path}\" -quiet || true\n"
+        f"open \"{target}\"\n"
     )
 
 
