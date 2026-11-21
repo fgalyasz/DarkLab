@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.release import update_apply, update_check, update_download, versioning
+from src.release import http, update_apply, update_check, update_download, versioning
 from src.release.downloads import LINUX_ASSET, MAC_ASSET, WINDOWS_ASSET
 from src.release.update_check import ReleaseInfo, UpdateCheckError
 
@@ -50,6 +50,16 @@ def _payload(version: str, assets: dict[str, str]) -> dict:
             {"name": name, "browser_download_url": url} for name, url in assets.items()
         ],
     }
+
+
+class HttpSslTests(unittest.TestCase):
+    def test_ssl_context_uses_certifi(self) -> None:
+        import certifi
+
+        context = http.ssl_context()
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, __import__("ssl").CERT_REQUIRED)
+        self.assertTrue(certifi.where().endswith("cacert.pem"))
 
 
 class VersioningTests(unittest.TestCase):

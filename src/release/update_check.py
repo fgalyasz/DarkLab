@@ -5,9 +5,10 @@ import platform
 from dataclasses import dataclass
 from typing import Callable
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from src.release.downloads import GITHUB_REPO, LINUX_ASSET, MAC_ASSET, WINDOWS_ASSET
+from src.release.http import open_url
 from src.release.versioning import is_newer, parse_semver, read_version_text
 
 
@@ -39,7 +40,7 @@ def parse_release_payload(payload: dict) -> ReleaseInfo:
     return ReleaseInfo(version, tag, str(payload.get("body", "")), assets)
 
 
-def fetch_latest_release(opener: Callable = urlopen) -> ReleaseInfo:
+def fetch_latest_release(opener: Callable = open_url) -> ReleaseInfo:
     request = Request(
         latest_api_url(),
         headers={"Accept": "application/vnd.github+json", "User-Agent": "DarkLab-Updater"},
