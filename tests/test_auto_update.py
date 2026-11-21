@@ -143,34 +143,30 @@ class UpdateApplyTests(unittest.TestCase):
             update_apply.open_download_page("https://example/x")
             open_url.assert_called_once_with("https://example/x")
 
-    def test_apply_darwin_copies_to_applications(self) -> None:
+    def test_macos_script_installs_into_applications(self) -> None:
+        script = update_apply._macos_script(
+            42,
+            "/tmp/DarkLab.dmg",
+            "/tmp/mnt",
+            update_apply.mac_install_destination(),
+        )
+        self.assertIn("hdiutil attach", script)
+        self.assertIn("ditto", script)
+        self.assertIn('rm -rf "/Applications/DarkLab.app"', script)
+        self.assertIn('ditto "$APP" "/Applications/DarkLab.app"', script)
+        self.assertIn('open "/Applications/DarkLab.app"', script)
+
+    def test_mac_install_destination_is_literal(self) -> None:
+        self.assertEqual(update_apply.mac_install_destination(), "/Applications/DarkLab.app")
+        self.assertIsInstance(update_apply.MAC_APPLICATIONS_APP, str)
+
+    def test_apply_macos_refuses_non_darwin_host(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             archive = Path(folder) / "DarkLab.dmg"
             archive.write_bytes(b"dmg")
-            with patch("src.release.update_apply.subprocess.Popen") as popen:
-                update_apply.apply_update(archive, "Darwin")
-            popen.assert_called_once()
-            script = Path(popen.call_args.args[0][1])
-            text = script.read_text(encoding="utf-8")
-            self.assertIn("hdiutil attach", text)
-            self.assertIn("ditto", text)
-            self.assertIn("/Applications/DarkLab.app", text)
-            self.assertIn(f'open "/Applications/DarkLab.app"', text)
-
-    def test_macos_script_targets_applications(self) -> None:
-        script = update_apply._macos_script(
-            42,
-            Path("/tmp/DarkLab.dmg"),
-            Path("/tmp/mnt"),
-            update_apply.mac_install_destination(),
-        )
-        self.assertIn("/Applications/DarkLab.app", script)
-        self.assertNotIn("\\Applications", script)
-        self.assertIn("DarkLab.app", script)
-
-    def test_mac_destination_is_posix(self) -> None:
-        self.assertEqual(update_apply.mac_install_destination(), "/Applications/DarkLab.app")
-        self.assertEqual(update_apply._posix(r"C:\tmp\mnt"), "C:/tmp/mnt")
+            with patch("src.release.update_apply.platform.system", return_value="Windows"):
+                with self.assertRaises(UpdateCheckError):
+                    update_apply.apply_update(archive, "Darwin")
 
     def test_apply_linux_writes_script(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

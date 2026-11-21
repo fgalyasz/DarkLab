@@ -57,17 +57,20 @@ def mac_install_destination() -> str:
     return MAC_APPLICATIONS_APP
 
 
-def _posix(path: Path | str) -> str:
-    return str(path).replace("\\", "/")
-
-
 def _apply_macos(archive: Path) -> None:
+    if platform.system().lower() != "darwin":
+        raise UpdateCheckError("macOS install scripts only run on macOS")
     staging = Path(tempfile.mkdtemp(prefix="darklab-update-"))
     mount = staging / "mnt"
     mount.mkdir()
     script = staging / "replace.sh"
     script.write_text(
-        _macos_script(os.getpid(), archive, mount, mac_install_destination()),
+        _macos_script(
+            os.getpid(),
+            str(archive),
+            str(mount),
+            mac_install_destination(),
+        ),
         encoding="utf-8",
     )
     script.chmod(0o755)
@@ -107,21 +110,18 @@ def _bundle_payload(staging: Path, executable_name: str) -> Path:
     raise UpdateCheckError(f"Update archive missing {executable_name}")
 
 
-def _macos_script(pid: int, dmg: Path, mount: Path, destination: str) -> str:
-    dmg_path = _posix(dmg)
-    mount_path = _posix(mount)
-    target = _posix(destination)
+def _macos_script(pid: int, dmg: str, mount: str, destination: str) -> str:
     return (
         f"#!/bin/bash\n"
         f"set -euo pipefail\n"
         f"while kill -0 {pid} 2>/dev/null; do sleep 1; done\n"
-        f"hdiutil attach \"{dmg_path}\" -nobrowse -readonly -mountpoint \"{mount_path}\"\n"
-        f"APP=\"$(find \"{mount_path}\" -maxdepth 2 -name '{MAC_APP_NAME}' -type d | head -n 1)\"\n"
-        f"if [[ -z \"$APP\" ]]; then hdiutil detach \"{mount_path}\" -quiet || true; exit 1; fi\n"
-        f"rm -rf \"{target}\"\n"
-        f"ditto \"$APP\" \"{target}\"\n"
-        f"hdiutil detach \"{mount_path}\" -quiet || true\n"
-        f"open \"{target}\"\n"
+        f"hdiutil attach \"{dmg}\" -nobrowse -readonly -mountpoint \"{mount}\"\n"
+        f"APP=\"$(find \"{mount}\" -maxdepth 2 -name '{MAC_APP_NAME}' -type d | head -n 1)\"\n"
+        f"if [[ -z \"$APP\" ]]; then hdiutil detach \"{mount}\" -quiet || true; exit 1; fi\n"
+        f"rm -rf \"{destination}\"\n"
+        f"ditto \"$APP\" \"{destination}\"\n"
+        f"hdiutil detach \"{mount}\" -quiet || true\n"
+        f"open \"{destination}\"\n"
     )
 
 
