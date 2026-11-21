@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
+from src.release.http import open_url
 from src.release.update_check import UpdateCheckError
 
 
@@ -12,7 +13,7 @@ def download_release_asset(
     url: str,
     destination: Path,
     on_progress: Callable[[int, int], None] | None = None,
-    opener: Callable = urlopen,
+    opener: Callable = open_url,
     chunk_size: int = 65536,
 ) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
