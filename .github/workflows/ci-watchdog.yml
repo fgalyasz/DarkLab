@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Installer image", "Publish company catalogue"]
+    types: [completed]
 
 permissions:
   contents: read
