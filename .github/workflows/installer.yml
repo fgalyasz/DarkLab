@@ -111,32 +111,117 @@ jobs:
         with:
           name: DarkLab-windows-x64
           path: DarkLab/dist
+      - name: Sync and commit catalogue version
+        working-directory: TenPrintSoftware
+        run: |
+          set -euo pipefail
+          npm run sync:versions
+          npm run build
+      - name: Commit version
+        working-directory: DarkLab
+        run: bash scripts/ci_commit_release.sh
+      - name: Commit company catalogue version
+        working-directory: DarkLab
+        env:
+          TENPRINT_ROOT: ${{ github.workspace }}/TenPrintSoftware
+        run: bash scripts/ci_commit_release.sh company
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DarkLab-installer
+          path: DarkLab/dist/DarkLab.dmg
+          if-no-files-found: error
+      - name: Notify on dmg failure
+        if: failure()
+        working-directory: TenPrintSoftware
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CONTACT_TO: ${{ secrets.CONTACT_TO }}
+          CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
+          NOTIFY_MODE: failure
+          WORKFLOW_FILE: installer.yml
+          WORKFLOW_NAME: Installer image
+        run: |
+          set -euo pipefail
+          export RELEASE_VERSION
+          RELEASE_VERSION="$(tr -d ' \t\n\r' < ../DarkLab/docs/version.txt 2>/dev/null || true)"
+          if [[ -f scripts/notify_ci_status.mjs ]]; then
+            node scripts/notify_ci_status.mjs
+          fi
+
+  publish-sites:
+    needs: [dmg]
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: DarkLab
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: fgalyasz/TenPrintSoftware
+          path: TenPrintSoftware
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: TenPrintSoftware/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install company site tools
+        working-directory: TenPrintSoftware
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: DarkLab-installer
+          path: DarkLab/dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: DarkLab-linux-x86_64
+          path: DarkLab/dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: DarkLab-windows-x64
+          path: DarkLab/dist
       - name: Restore Cloudflare login
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
           WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
         run: |
           set -euo pipefail
-          mac_dir="${HOME}/Library/Preferences/.wrangler/config"
-          linux_dir="${HOME}/.config/.wrangler/config"
-          mkdir -p "${mac_dir}" "${linux_dir}"
-          cfg="${mac_dir}/default.toml"
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::ACTIONS_PUSH_TOKEN missing on DarkLab; cannot restore Cloudflare login."
+            exit 1
+          fi
+          cfg_dir="${HOME}/.config/.wrangler/config"
+          mkdir -p "${cfg_dir}"
+          cfg="${cfg_dir}/default.toml"
           enc="$(gh variable get WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware 2>/dev/null || true)"
           if [[ -n "${enc}" ]] && printf '%s' "${enc}" | PASS="${GH_TOKEN}" openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:PASS > "${cfg}" 2>/dev/null && [[ -s "${cfg}" ]]; then
             echo "Restored live Cloudflare login from WRANGLER_CONFIG_ENC"
-          elif [[ -n "${WRANGLER_CONFIG}" ]]; then
+          elif [[ -n "${WRANGLER_CONFIG:-}" ]]; then
             printf '%s\n' "${WRANGLER_CONFIG}" > "${cfg}"
             echo "Restored Cloudflare login from WRANGLER_CONFIG secret"
+          else
+            echo "::error::No WRANGLER_CONFIG_ENC or WRANGLER_CONFIG available."
+            exit 1
           fi
-          if [[ -s "${cfg}" ]]; then
-            chmod 600 "${cfg}"
-            cp "${cfg}" "${linux_dir}/default.toml"
-            chmod 600 "${linux_dir}/default.toml"
-            cp "${cfg}" "${RUNNER_TEMP}/wrangler-before.toml"
+          chmod 600 "${cfg}"
+          if ! grep -q "oauth_token" "${cfg}"; then
+            echo "::error::Restored Cloudflare config is missing oauth_token."
+            exit 1
           fi
+          cp "${cfg}" "${RUNNER_TEMP}/wrangler-before.toml"
       - name: Deploy product site
-        id: deploy_product
-        continue-on-error: true
         working-directory: DarkLab
         env:
           GH_TOKEN: ${{ github.token }}
@@ -159,7 +244,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
         run: |
-          cfg="${HOME}/Library/Preferences/.wrangler/config/default.toml"
+          cfg="${HOME}/.config/.wrangler/config/default.toml"
           before="${RUNNER_TEMP}/wrangler-before.toml"
           if [[ -s "${cfg}" ]] && [[ -f "${before}" ]] && ! cmp -s "${cfg}" "${before}" && grep -q "oauth_token" "${cfg}"; then
             enc="$(PASS="${GH_TOKEN}" openssl enc -aes-256-cbc -pbkdf2 -salt -base64 -A -pass env:PASS -in "${cfg}")"
@@ -168,19 +253,6 @@ jobs:
               gh secret set WRANGLER_CONFIG --repo "fgalyasz/${repo}" < "${cfg}"
             done
           fi
-      - name: Commit version
-        working-directory: DarkLab
-        run: bash scripts/ci_commit_release.sh
-      - name: Commit company catalogue version
-        working-directory: DarkLab
-        env:
-          TENPRINT_ROOT: ${{ github.workspace }}/TenPrintSoftware
-        run: bash scripts/ci_commit_release.sh company
-      - uses: actions/upload-artifact@v4
-        with:
-          name: DarkLab-installer
-          path: DarkLab/dist/DarkLab.dmg
-          if-no-files-found: error
       - name: Notify on first success or recovery
         if: success()
         working-directory: TenPrintSoftware
@@ -220,6 +292,16 @@ jobs:
           RELEASE_VERSION="$(tr -d ' \t\n\r' < ../DarkLab/docs/version.txt 2>/dev/null || true)"
           if [[ -f scripts/notify_ci_status.mjs ]]; then
             node scripts/notify_ci_status.mjs
-          else
-            echo "notify_ci_status.mjs not on TenPrintSoftware main yet; skip failure issue/email."
           fi
+      - name: Auto-fallback Publish company catalogue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::ACTIONS_PUSH_TOKEN missing; cannot dispatch catalogue publish."
+            exit 1
+          fi
+          gh workflow run "Publish company catalogue" --repo fgalyasz/DarkLab --ref main
+          echo "Dispatched Publish company catalogue as automatic fallback."
