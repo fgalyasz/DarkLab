@@ -148,6 +148,7 @@ class StyleSheet:
             background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(82, 82, 82), stop:1 rgb(54, 54, 54));
             border-top: 1px solid rgb(104, 104, 104);
             border-bottom: 1px solid rgb(16, 16, 16);
+            border-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
         }}
         #panelTitle {{
             color: rgb(236, 236, 236);
@@ -162,7 +163,7 @@ class StyleSheet:
             border-left: 1px solid rgb(10, 10, 10);
             border-right: 1px solid rgb(62, 62, 62);
             border-bottom: 2px solid rgb(8, 8, 8);
-            border-radius: {Density.CORNER_RADIUS_PX}px;
+            border-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
         }}
         #developHeading {{
             background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(92, 92, 92), stop:1 rgb(56, 56, 56));
@@ -171,7 +172,15 @@ class StyleSheet:
             font-weight: 600;
             border-top: 1px solid rgb(124, 124, 124);
             border-bottom: 1px solid rgb(12, 12, 12);
-            padding: 2px 6px;
+            border-top-left-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
+            border-top-right-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
+            padding: 0px;
+        }}
+        #developHeadingTitle {{
+            color: rgb(242, 242, 242);
+            font-size: {Density.HINT_PX}px;
+            font-weight: 600;
+            background: transparent;
         }}
         #sliderCaption {{
             color: rgb(210, 210, 210);
@@ -220,7 +229,7 @@ class StyleSheet:
         QFrame#importBlock {{
             background-color: rgb(28, 28, 28);
             border: 1px solid rgb(12, 12, 12);
-            border-radius: {Density.CORNER_RADIUS_PX}px;
+            border-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
         }}
         QLabel#importBlockTitle {{
             background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(108, 108, 108), stop:1 rgb(62, 62, 62));
@@ -230,6 +239,8 @@ class StyleSheet:
             padding: 4px 8px;
             border-top: 1px solid rgb(140, 140, 140);
             border-bottom: 1px solid rgb(10, 10, 10);
+            border-top-left-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
+            border-top-right-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
         }}
         QWidget#importBlockBody {{ background-color: rgb(36, 36, 36); }}
         QWidget#importBlockBody QLabel {{ background: transparent; font-size: {Density.BODY_PX}px; }}

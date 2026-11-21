@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 from src.develop.crop_settings import MAX_ANGLE, MAX_EDGE
 from src.develop.white_balance import CHOICES
 from src.ui.widgets.color_wheel import ColorWheel
+from src.ui.widgets.develop_group import DevelopGroup
 from src.ui.widgets.slider_row import SliderRow
 from src.ui.widgets.tone_curve_widget import ToneCurveWidget
 
@@ -218,29 +219,8 @@ def _layout(panel: QWidget) -> QVBoxLayout:
 
 
 def _group(title: str) -> tuple[QWidget, QVBoxLayout]:
-    group = QWidget()
-    group.setObjectName("developGroup")
-    outer = QVBoxLayout(group)
-    outer.setContentsMargins(1, 1, 1, 1)
-    outer.setSpacing(0)
-    outer.addWidget(_heading(title))
-    return group, _group_body(outer)
-
-
-def _group_body(outer: QVBoxLayout) -> QVBoxLayout:
-    body = QWidget()
-    body.setObjectName("developGroupBody")
-    layout = QVBoxLayout(body)
-    layout.setContentsMargins(5, 4, 5, 5)
-    layout.setSpacing(1)
-    outer.addWidget(body)
-    return layout
-
-
-def _heading(title: str) -> QLabel:
-    label = QLabel(title)
-    label.setObjectName("developHeading")
-    return label
+    group = DevelopGroup(title)
+    return group, group.body_layout()
 
 
 def _treatment_group() -> QWidget:

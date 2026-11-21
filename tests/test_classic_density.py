@@ -12,7 +12,9 @@ from src.ui.themes import StyleSheet
 from src.ui.widgets.color_wheel import ColorWheel
 from src.ui.widgets.module_bar import ModuleBar
 from src.ui.widgets.slider_row import SliderRow
+from src.ui.develop_sections import DevelopControls, basic_panel
 from src.ui.widgets.collapsible_section import HEADER_HEIGHT, CollapsibleSection
+from src.ui.widgets.develop_group import DevelopGroup
 
 APP = QApplication.instance() or QApplication([])
 
@@ -83,6 +85,30 @@ class DensityWidgetTests(unittest.TestCase):
         section = CollapsibleSection("Navigator", QWidget())
         self.assertEqual(section.header().height(), Density.PANEL_HEADER_HEIGHT)
         section.close()
+
+    def test_stylesheet_uses_panel_corner_radius(self) -> None:
+        self.assertIn(f"border-radius: {Density.PANEL_CORNER_RADIUS_PX}px", StyleSheet.LIGHTROOM)
+        self.assertGreaterEqual(Density.PANEL_CORNER_RADIUS_PX, 6)
+
+    def test_develop_groups_collapse_like_classic(self) -> None:
+        group = DevelopGroup("Tone")
+        body = group.body_layout().parentWidget()
+        group.show()
+        APP.processEvents()
+        self.assertTrue(group.is_expanded())
+        self.assertTrue(body.isVisible())
+        group.toggle()
+        APP.processEvents()
+        self.assertFalse(group.is_expanded())
+        self.assertFalse(body.isVisible())
+        group.close()
+
+    def test_basic_panel_hosts_collapsible_groups(self) -> None:
+        panel = basic_panel(DevelopControls())
+        groups = panel.findChildren(DevelopGroup)
+        self.assertEqual([group.title() for group in groups], ["Treatment", "WB", "Tone", "Presence"])
+        self.assertTrue(all(group.is_expanded() for group in groups))
+        panel.close()
 
 
 if __name__ == "__main__":
