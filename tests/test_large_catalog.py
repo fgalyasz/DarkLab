@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication
 
@@ -196,12 +197,19 @@ class FilmstripModelTests(unittest.TestCase):
         strip.set_thumbnail(Path("/x/a.jpg"), QPixmap(8, 8))
         model = strip.model()
         index = model.index(0)
-        self.assertEqual(index.data(), "a.jpg")
+        self.assertEqual(index.data(), "")
+        self.assertEqual(index.data(Qt.ItemDataRole.ToolTipRole), "a.jpg")
         self.assertFalse(index.data(1).isNull())
         self.assertEqual(index.data(0x0100), str(Path("/x/a.jpg")))
         self.assertIsNone(model.data(index, 99))
         self.assertIsNone(model.data(model.index(5), 0))
         self.assertEqual(model.rowCount(index), 0)
+
+    def test_filmstrip_keeps_usable_thumbnail_height(self) -> None:
+        strip = FilmstripWidget()
+        self.assertGreaterEqual(strip.iconSize().height(), 56)
+        self.assertGreaterEqual(strip.gridSize().height(), strip.iconSize().height())
+        self.assertGreaterEqual(strip.height(), strip.gridSize().height())
 
 
 class LargeCatalogPanelTests(unittest.TestCase):
