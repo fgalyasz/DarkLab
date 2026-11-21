@@ -13,7 +13,7 @@ from webbrowser import open as open_url
 
 from src.release.update_check import UpdateCheckError
 
-MAC_APPLICATIONS_APP = Path("/Applications/DarkLab.app")
+MAC_APPLICATIONS_APP = "/Applications/DarkLab.app"
 MAC_APP_NAME = "DarkLab.app"
 
 
@@ -53,17 +53,24 @@ def open_download_page(url: str) -> None:
     open_url(url)
 
 
-def mac_install_destination() -> Path:
+def mac_install_destination() -> str:
     return MAC_APPLICATIONS_APP
 
 
 def _apply_macos(archive: Path) -> None:
+    if platform.system().lower() != "darwin":
+        raise UpdateCheckError("macOS install scripts only run on macOS")
     staging = Path(tempfile.mkdtemp(prefix="darklab-update-"))
     mount = staging / "mnt"
     mount.mkdir()
     script = staging / "replace.sh"
     script.write_text(
-        _macos_script(os.getpid(), archive, mount, mac_install_destination()),
+        _macos_script(
+            os.getpid(),
+            str(archive),
+            str(mount),
+            mac_install_destination(),
+        ),
         encoding="utf-8",
     )
     script.chmod(0o755)
@@ -103,7 +110,7 @@ def _bundle_payload(staging: Path, executable_name: str) -> Path:
     raise UpdateCheckError(f"Update archive missing {executable_name}")
 
 
-def _macos_script(pid: int, dmg: Path, mount: Path, destination: Path) -> str:
+def _macos_script(pid: int, dmg: str, mount: str, destination: str) -> str:
     return (
         f"#!/bin/bash\n"
         f"set -euo pipefail\n"
