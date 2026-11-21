@@ -91,7 +91,7 @@ class RenamePatternDialog(QDialog):
         preview_layout.addWidget(QLabel("Preview:"))
         self.preview_label = QLabel()
         self.preview_label.setStyleSheet(
-            "color: rgb(100, 200, 100); font-weight: bold; font-size: 13px;"
+            "color: rgb(100, 200, 100); font-weight: bold; font-size: 11px;"
         )
         preview_layout.addWidget(self.preview_label)
         preview_layout.addStretch()
@@ -159,8 +159,8 @@ class RenamePatternDialog(QDialog):
             token_btn.clicked.connect(lambda _checked=False, t=token: self._insert_token(t))
             token_btn.setStyleSheet(
                 "QPushButton { color: rgb(250, 250, 252); background-color: rgb(86, 96, 112); "
-                "border: 1px solid rgb(140, 150, 168); border-radius: 10px; "
-                "padding: 4px 10px; font-size: 11px; font-weight: bold; }"
+                "border: 1px solid rgb(140, 150, 168); border-radius: 2px; "
+                "padding: 2px 8px; font-size: 10px; font-weight: bold; }"
                 "QPushButton:hover { background-color: rgb(104, 116, 136); border: 1px solid rgb(176, 186, 204); }"
             )
 
@@ -181,18 +181,18 @@ class RenamePatternDialog(QDialog):
     def _style_widgets(self) -> None:
         self.setStyleSheet(
             "QDialog { background-color: rgb(40, 40, 45); }"
-            "QLabel { color: white; font-size: 12px; }"
+            "QLabel { color: white; font-size: 11px; }"
             "QLineEdit { color: white; background-color: rgb(68, 68, 74); "
-            "border: 1px solid rgb(60, 60, 65); border-radius: 4px; padding: 6px; font-size: 12px; }"
+            "border: 1px solid rgb(60, 60, 65); border-radius: 2px; padding: 3px 6px; font-size: 11px; }"
             "QComboBox { color: white; background-color: rgb(68, 68, 74); "
-            "border: 1px solid rgb(90, 90, 96); border-radius: 4px; padding: 4px; "
-            "min-height: 28px; }"
-            "QComboBox::drop-down { border: none; width: 24px; }"
+            "border: 1px solid rgb(90, 90, 96); border-radius: 2px; padding: 2px 4px; "
+            "min-height: 20px; }"
+            "QComboBox::drop-down { border: none; width: 18px; }"
             "QComboBox QAbstractItemView { color: white; background-color: rgb(52, 52, 58); "
-            "selection-background-color: rgb(0, 122, 255); }"
+            "selection-background-color: rgb(88, 88, 88); }"
             "QPushButton { background-color: rgb(62, 62, 68); color: white; "
-            "border: 1px solid rgb(80, 80, 85); border-radius: 4px; padding: 6px 12px; "
-            "font-size: 12px; }"
+            "border: 1px solid rgb(80, 80, 85); border-radius: 2px; padding: 3px 8px; "
+            "font-size: 11px; }"
             "QPushButton:hover { background-color: rgb(74, 74, 80); }"
             "QPushButton:disabled { background-color: rgb(50, 50, 55); color: rgb(130, 130, 135); }"
         )

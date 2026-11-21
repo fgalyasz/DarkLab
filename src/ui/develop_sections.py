@@ -1,12 +1,13 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QButtonGroup, QComboBox, QHBoxLayout, QLabel, QPushButton, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget, QCheckBox, QListWidget,
+    QButtonGroup, QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget, QCheckBox, QListWidget,
 )
 
 from src.develop.crop_settings import MAX_ANGLE, MAX_EDGE
 from src.develop.white_balance import CHOICES
 from src.ui.widgets.color_wheel import ColorWheel
+from src.ui.widgets.develop_group import DevelopGroup
 from src.ui.widgets.slider_row import SliderRow
 from src.ui.widgets.tone_curve_widget import ToneCurveWidget
 
@@ -74,6 +75,7 @@ def basic_panel(controls: DevelopControls) -> QWidget:
     layout.addWidget(_balance_group(controls))
     _add_named_sliders(layout, controls, "Tone", TONE_SPECS)
     _add_named_sliders(layout, controls, "Presence", PRESENCE_SPECS)
+    _finish(layout)
     return panel
 
 
@@ -83,6 +85,7 @@ def tone_curve_panel(controls: DevelopControls) -> QWidget:
     layout.addWidget(_curve_channels())
     layout.addWidget(ToneCurveWidget())
     layout.addWidget(_curve_group(controls))
+    _finish(layout)
     return panel
 
 
@@ -90,6 +93,7 @@ def color_mixer_panel(controls: DevelopControls) -> QWidget:
     panel = _panel()
     layout = _layout(panel)
     layout.addWidget(_mixer_group(controls))
+    _finish(layout)
     return panel
 
 
@@ -97,6 +101,7 @@ def color_grading_panel(controls: DevelopControls) -> QWidget:
     panel = _panel()
     layout = _layout(panel)
     layout.addWidget(_grading_group(controls))
+    _finish(layout)
     return panel
 
 
@@ -117,6 +122,7 @@ def detail_panel(controls: DevelopControls) -> QWidget:
         ("Detail  ", 0, 100, 50),
         ("Smoothness", 0, 100, 50),
     ))
+    _finish(layout)
     return panel
 
 
@@ -125,6 +131,7 @@ def lens_panel(controls: DevelopControls) -> QWidget:
     layout = _layout(panel)
     layout.addWidget(_profile_group())
     layout.addWidget(_manual_lens_group(controls))
+    _finish(layout)
     return panel
 
 
@@ -132,6 +139,7 @@ def transform_panel(controls: DevelopControls) -> QWidget:
     panel = _panel()
     layout = _layout(panel)
     layout.addWidget(_upright_group(controls))
+    _finish(layout)
     return panel
 
 
@@ -144,6 +152,7 @@ def crop_panel(controls: DevelopControls) -> QWidget:
     inner.addWidget(controls.slider("Angle", -MAX_ANGLE, MAX_ANGLE, 0))
     inner.addWidget(controls.crop_lock)
     layout.addWidget(group)
+    _finish(layout)
     return panel
 
 
@@ -162,6 +171,7 @@ def effects_panel(controls: DevelopControls) -> QWidget:
         ("Size", 0, 100, 25),
         ("Roughness", 0, 100, 50),
     ))
+    _finish(layout)
     return panel
 
 
@@ -171,6 +181,7 @@ def calibration_panel(controls: DevelopControls) -> QWidget:
     layout.addWidget(_primary_group(controls, "Shadows", ("Shadows Tint",)))
     for primary in ("Red Primary", "Green Primary", "Blue Primary"):
         layout.addWidget(_primary_group(controls, primary, (f"{primary} Hue", f"{primary} Saturation")))
+    _finish(layout)
     return panel
 
 
@@ -180,6 +191,7 @@ def presets_panel(controls: DevelopControls) -> QWidget:
     layout.addWidget(QLabel("None"))
     layout.addWidget(controls.slider("Amount", 0, 100, 0))
     layout.addWidget(_preset_tree())
+    _finish(layout)
     return panel
 
 
@@ -207,40 +219,25 @@ def _add_named_sliders(layout: QVBoxLayout, controls: DevelopControls, title: st
 
 
 def _panel() -> QWidget:
-    return QWidget()
+    panel = QWidget()
+    panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+    return panel
 
 
 def _layout(panel: QWidget) -> QVBoxLayout:
     layout = QVBoxLayout(panel)
-    layout.setContentsMargins(4, 6, 4, 8)
-    layout.setSpacing(8)
+    layout.setContentsMargins(2, 2, 2, 2)
+    layout.setSpacing(1)
     return layout
+
+
+def _finish(layout: QVBoxLayout) -> None:
+    return
 
 
 def _group(title: str) -> tuple[QWidget, QVBoxLayout]:
-    group = QWidget()
-    group.setObjectName("developGroup")
-    outer = QVBoxLayout(group)
-    outer.setContentsMargins(1, 1, 1, 1)
-    outer.setSpacing(0)
-    outer.addWidget(_heading(title))
-    return group, _group_body(outer)
-
-
-def _group_body(outer: QVBoxLayout) -> QVBoxLayout:
-    body = QWidget()
-    body.setObjectName("developGroupBody")
-    layout = QVBoxLayout(body)
-    layout.setContentsMargins(6, 6, 6, 7)
-    layout.setSpacing(2)
-    outer.addWidget(body)
-    return layout
-
-
-def _heading(title: str) -> QLabel:
-    label = QLabel(title)
-    label.setObjectName("developHeading")
-    return label
+    group = DevelopGroup(title)
+    return group, group.body_layout()
 
 
 def _treatment_group() -> QWidget:

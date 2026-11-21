@@ -1,5 +1,7 @@
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+
+from src.ui.density import Density
 
 
 class ModuleBar(QWidget):
@@ -8,7 +10,7 @@ class ModuleBar(QWidget):
     def __init__(self, modules: tuple[tuple[str, str], ...], catalog_name: str) -> None:
         super().__init__()
         self._buttons: dict[str, QPushButton] = {}
-        self.setFixedHeight(42)
+        self.setFixedHeight(Density.MODULE_BAR_HEIGHT)
         self._build(modules, catalog_name)
 
     def set_current(self, module_id: str) -> None:
@@ -17,7 +19,8 @@ class ModuleBar(QWidget):
 
     def _build(self, modules: tuple[tuple[str, str], ...], catalog_name: str) -> None:
         row = QHBoxLayout(self)
-        row.setContentsMargins(12, 4, 12, 4)
+        row.setContentsMargins(10, 2, 10, 2)
+        row.setSpacing(2)
         row.addWidget(self._identity())
         row.addStretch()
         for module_id, title in modules:
@@ -27,18 +30,23 @@ class ModuleBar(QWidget):
 
     def _identity(self) -> QLabel:
         label = QLabel("DarkLab")
-        label.setStyleSheet("color: rgb(230, 230, 230); font-size: 13px; font-weight: 600;")
+        label.setStyleSheet(
+            f"color: rgb(230, 230, 230); font-size: {Density.HEADER_PX}px; font-weight: 600;"
+        )
         return label
 
     def _catalog_label(self, catalog_name: str) -> QLabel:
         label = QLabel(catalog_name)
-        label.setStyleSheet("color: rgb(190, 190, 190); font-size: 12px;")
+        label.setStyleSheet(f"color: rgb(190, 190, 190); font-size: {Density.HINT_PX}px;")
+        label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         return label
 
     def _module_button(self, module_id: str, title: str) -> QPushButton:
         button = QPushButton(title)
         button.setCheckable(True)
         button.setProperty("module_id", module_id)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         button.setStyleSheet(self._button_style())
         button.clicked.connect(self._on_module_clicked)
         self._buttons[module_id] = button
@@ -55,8 +63,8 @@ class ModuleBar(QWidget):
 
     def _button_style(self) -> str:
         return (
-            "QPushButton { background: transparent; border: none; color: rgb(168, 168, 168);"
-            " font-size: 13px; padding: 4px 10px; }"
+            "QPushButton { background: transparent; border: none; border-bottom: 2px solid transparent;"
+            f" color: rgb(168, 168, 168); font-size: {Density.BODY_PX}px; padding: 1px 8px 0px 8px; }}"
             "QPushButton:hover { color: white; }"
-            "QPushButton:checked { color: white; font-weight: 600; }"
+            "QPushButton:checked { color: white; font-weight: 600; border-bottom: 2px solid rgb(230, 230, 230); }"
         )

@@ -91,7 +91,7 @@ class IPTCPresetDialog(QDialog):
 
         # Preset name label
         self.name_label = QLabel("No preset selected")
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         right_layout.addWidget(self.name_label)
 
         # IPTC fields

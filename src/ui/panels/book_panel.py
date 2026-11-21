@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QLabel
 
+from src.ui.density import Density
 from src.ui.panels.base_panel import BasePanel
 
 
@@ -8,7 +9,7 @@ class BookPanel(BasePanel):
         super().__init__("book")
 
     def _add_placeholder_content(self) -> None:
-        description = QLabel("Book layouts will be built from the library selection.")
+        description = QLabel("Book layouts will appear here.")
         description.setWordWrap(True)
-        description.setStyleSheet("color: rgb(180, 180, 180); font-size: 14px;")
+        description.setStyleSheet(f"color: rgb(180, 180, 180); font-size: {Density.BODY_PX}px;")
         self.content_layout.addWidget(description)

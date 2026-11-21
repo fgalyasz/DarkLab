@@ -425,9 +425,10 @@ class ImportDialog(QDialog):
     def _build_import_top_bar(self) -> QWidget:
         bar = QWidget()
         bar.setObjectName("importTopBar")
-        bar.setFixedHeight(52)
+        bar.setFixedHeight(40)
         row = QHBoxLayout(bar)
-        row.setContentsMargins(10, 4, 12, 4)
+        row.setContentsMargins(8, 2, 10, 2)
+        row.setSpacing(4)
         self._add_source_controls(row)
         row.addStretch()
         self._add_mode_controls(row)
@@ -1346,15 +1347,17 @@ class ImportDialog(QDialog):
         group_layout.setSpacing(0)
 
         header_widget = QWidget()
-        header_widget.setFixedHeight(28)
+        header_widget.setFixedHeight(24)
         header_widget.setStyleSheet(
-            f"background-color: {lighter_color_str}; border: 1px solid rgb(60, 60, 65); border-radius: 5px;"
+            f"background-color: {lighter_color_str}; border: 1px solid rgb(60, 60, 65); border-radius: 2px;"
         )
         header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(10, 4, 10, 4)
+        header_layout.setContentsMargins(8, 2, 8, 2)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet("color: white; font-size: 13px; font-weight: bold; background-color: transparent; border: none;")
+        title_label.setStyleSheet(
+            "color: white; font-size: 11px; font-weight: bold; background-color: transparent; border: none;"
+        )
 
         toggle_button = QPushButton("▼" if is_expanded else "▶")
         toggle_button.setFixedSize(18, 18)
@@ -1402,7 +1405,7 @@ class ImportDialog(QDialog):
         layout.addWidget(self._create_small_button("Rename", self._rename_import_preset))
         layout.addWidget(self._create_small_button("Delete", self._delete_import_preset))
         self.preset_feedback_label = QLabel("")
-        self.preset_feedback_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 11px;")
+        self.preset_feedback_label.setStyleSheet("color: rgb(180, 180, 180); font-size: 10px;")
         layout.addWidget(self.preset_feedback_label)
 
         return widget
