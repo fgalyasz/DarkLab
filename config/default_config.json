@@ -17,5 +17,9 @@
     "print": {},
     "slideshow": {},
     "website": {}
+  },
+  "updates": {
+    "check_on_startup": true,
+    "skipped_version": ""
   }
 }

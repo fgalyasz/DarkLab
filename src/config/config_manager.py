@@ -108,6 +108,10 @@ class ConfigManager:
                 "print": {},
                 "slideshow": {},
                 "website": {}
+            },
+            "updates": {
+                "check_on_startup": True,
+                "skipped_version": ""
             }
         }
     

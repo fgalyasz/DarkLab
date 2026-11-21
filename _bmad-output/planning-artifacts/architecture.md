@@ -134,6 +134,10 @@ All AI correction features (`src/ai/semantic_masks.py`, `src/ai/scene_corrector.
 - **Frontier Planning Model for PRDs, Architecture, and Documentation:** All PRDs, architecture revisions, epic/story definitions, and technical specifications must be authored with the best available frontier reasoning/planning model to ensure exhaustive edge-case coverage and zero architectural ambiguity.
 - **Cost-Effective Model Optimization for Development:** Every Story ticket must include a **Cost-Effective Implementation Blueprint** naming exact target files, function signatures (≤10 lines per function), settings/SQLite keys, and deterministic unit test files (`>=95%` coverage) so cost-effective coding models (`Composer 2.5 Fast`) can implement each story in a single pass.
 
+### ADR-17 — Community auto-update via GitHub Releases
+
+`src/release` owns version read, latest-release fetch, asset select, download, and apply hand-off. The feed is the public `releases/latest` API for `fgalyasz/DarkLab` (Community only). Widgets live in `src/ui/update_controller.py` and call these services; services do not import Qt. Network failures stay soft on quiet startup checks. macOS opens the downloaded DMG; frozen Windows/Linux schedule a replace-after-exit script. Sparkle/WinSparkle are not required for Community.
+
 ## Structure
 
 ```text
@@ -144,6 +148,7 @@ src/develop/        settings schema, history, presets, auto-tone/wb/upright/lens
 src/ai/             local-first semantic masks, scene auto-develop, portrait retouch, denoise, spot heal
 src/exporting/      render-to-file, export presets
 src/imaging/        decode and the single 12-stage render pipeline
+src/release/        versioning, GitHub release assets, auto-update check/download/apply
 src/ui/             windows, dialogs, widgets
 tests/              unittest, no network, no display for domain tests
 ```
