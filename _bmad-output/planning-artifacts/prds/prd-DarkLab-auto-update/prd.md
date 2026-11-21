@@ -45,7 +45,7 @@ DarkLab checks the public Community release feed, offers a newer build, download
 **Consequences (testable):**
 - Asset names match `src/release/downloads.py` (`DarkLab.dmg`, `DarkLab-linux-x86_64.tar.gz`, `DarkLab-windows-x64.zip`).
 - Download writes under a temp directory with progress; cancel stops the transfer.
-- macOS opens the DMG. Windows and Linux extract beside the frozen install root and schedule a replace script that restarts DarkLab after this process exits.
+- macOS mounts the DMG after quit, copies `DarkLab.app` into `/Applications/DarkLab.app` with `ditto`, unmounts, and opens the new app. Windows and Linux extract beside the frozen install root and schedule a replace script that restarts DarkLab after this process exits.
 - Non-frozen (dev) Update opens the asset URL in the system browser instead of replacing files.
 
 ### FR-U5 Community channel only

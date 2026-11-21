@@ -13,6 +13,9 @@ from webbrowser import open as open_url
 
 from src.release.update_check import UpdateCheckError
 
+MAC_APPLICATIONS_APP = Path("/Applications/DarkLab.app")
+MAC_APP_NAME = "DarkLab.app"
+
 
 def is_frozen_app() -> bool:
     return bool(getattr(sys, "frozen", False))
@@ -27,7 +30,7 @@ def install_root() -> Path:
 def apply_update(archive: Path, system: str | None = None) -> None:
     name = (system or platform.system()).lower()
     if name == "darwin":
-        subprocess.Popen(["open", str(archive)])
+        _apply_macos(archive)
         return
     if name == "windows":
         _apply_windows(archive)
@@ -48,6 +51,23 @@ def open_downloaded_installer(archive: Path, system: str | None = None) -> None:
 
 def open_download_page(url: str) -> None:
     open_url(url)
+
+
+def mac_install_destination() -> Path:
+    return MAC_APPLICATIONS_APP
+
+
+def _apply_macos(archive: Path) -> None:
+    staging = Path(tempfile.mkdtemp(prefix="darklab-update-"))
+    mount = staging / "mnt"
+    mount.mkdir()
+    script = staging / "replace.sh"
+    script.write_text(
+        _macos_script(os.getpid(), archive, mount, mac_install_destination()),
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    subprocess.Popen(["/bin/bash", str(script)], close_fds=True)
 
 
 def _apply_windows(archive: Path) -> None:
@@ -81,6 +101,21 @@ def _bundle_payload(staging: Path, executable_name: str) -> Path:
     if (nested / executable_name).exists():
         return nested
     raise UpdateCheckError(f"Update archive missing {executable_name}")
+
+
+def _macos_script(pid: int, dmg: Path, mount: Path, destination: Path) -> str:
+    return (
+        f"#!/bin/bash\n"
+        f"set -euo pipefail\n"
+        f"while kill -0 {pid} 2>/dev/null; do sleep 1; done\n"
+        f"hdiutil attach \"{dmg}\" -nobrowse -readonly -mountpoint \"{mount}\"\n"
+        f"APP=\"$(find \"{mount}\" -maxdepth 2 -name '{MAC_APP_NAME}' -type d | head -n 1)\"\n"
+        f"if [[ -z \"$APP\" ]]; then hdiutil detach \"{mount}\" -quiet || true; exit 1; fi\n"
+        f"rm -rf \"{destination}\"\n"
+        f"ditto \"$APP\" \"{destination}\"\n"
+        f"hdiutil detach \"{mount}\" -quiet || true\n"
+        f"open \"{destination}\"\n"
+    )
 
 
 def _windows_script(pid: int, payload: Path, root: Path) -> str:

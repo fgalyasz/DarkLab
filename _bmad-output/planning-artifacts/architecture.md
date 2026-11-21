@@ -136,7 +136,7 @@ All AI correction features (`src/ai/semantic_masks.py`, `src/ai/scene_corrector.
 
 ### ADR-17 — Community auto-update via GitHub Releases
 
-`src/release` owns version read, latest-release fetch, asset select, download, and apply hand-off. The feed is the public `releases/latest` API for `fgalyasz/DarkLab` (Community only). Widgets live in `src/ui/update_controller.py` and call these services; services do not import Qt. Network failures stay soft on quiet startup checks. macOS opens the downloaded DMG; frozen Windows/Linux schedule a replace-after-exit script. Sparkle/WinSparkle are not required for Community.
+`src/release` owns version read, latest-release fetch, asset select, download, and apply hand-off. The feed is the public `releases/latest` API for `fgalyasz/DarkLab` (Community only). Widgets live in `src/ui/update_controller.py` and call these services; services do not import Qt. Network failures stay soft on quiet startup checks. macOS mounts the DMG after quit and copies into `/Applications/DarkLab.app`; frozen Windows/Linux schedule a replace-after-exit script. Sparkle/WinSparkle are not required for Community.
 
 ## Structure
 

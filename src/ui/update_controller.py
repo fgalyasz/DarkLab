@@ -173,5 +173,5 @@ class UpdateController(QObject):
         self._quit_if_replaced()
 
     def _quit_if_replaced(self) -> None:
-        if update_apply.is_frozen_app() and platform.system().lower() != "darwin":
+        if update_apply.is_frozen_app():
             self._parent.close()
