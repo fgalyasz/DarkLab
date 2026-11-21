@@ -4,7 +4,7 @@ status: final
 created: 2026-11-21
 updated: 2026-11-21
 extends: prd-DarkLab-2026-10-10
-parent_issue: pending
+parent_issue: https://github.com/fgalyasz/DarkLab/issues/162
 ---
 
 # PRD: Develop slider behavior and Basic tone preview
