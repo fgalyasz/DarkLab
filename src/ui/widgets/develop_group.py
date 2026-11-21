@@ -101,7 +101,7 @@ class DevelopGroup(QWidget):
         collapsed = max(4, radius // 2)
         return (
             "#developHeading {"
-            f" border-radius: {collapsed}px; border-bottom: none; }"
+            f" border-radius: {collapsed}px; border-bottom: none; }}"
         )
 
     def _apply_size_policy(self) -> None:
