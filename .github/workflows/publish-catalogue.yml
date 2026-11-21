@@ -73,3 +73,11 @@ jobs:
             unset CLOUDFLARE_API_TOKEN
             npm run deploy
           fi
+      - name: Persist refreshed Cloudflare login
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          chmod +x DarkLab/scripts/ci_persist_wrangler.sh
+          DarkLab/scripts/ci_persist_wrangler.sh force

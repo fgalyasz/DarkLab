@@ -45,42 +45,47 @@ auth_works() {
   fi
 }
 
-restored=""
-if write_cfg_from_enc; then
-  restored="WRANGLER_CONFIG_ENC"
-elif write_cfg_from_secret; then
-  restored="WRANGLER_CONFIG"
-else
-  echo "::error::No WRANGLER_CONFIG_ENC or WRANGLER_CONFIG with oauth_token."
-  exit 1
-fi
-chmod 600 "${cfg}"
-if grep -q "expiration_time" "${cfg}"; then
-  echo "Restored ${restored}; expiration_time=$(grep -E '^expiration_time' "${cfg}" | head -1 | cut -d= -f2- | tr -d ' \"')"
-else
-  echo "Restored ${restored}; no expiration_time field"
-fi
-if auth_works; then
-  echo "wrangler whoami OK"
+try_source() {
+  local name="$1"
+  echo "Trying Cloudflare login from ${name}"
+  if ! grep -q "oauth_token" "${cfg}"; then
+    return 1
+  fi
+  chmod 600 "${cfg}"
+  if grep -q "expiration_time" "${cfg}"; then
+    echo "  expiration_time=$(grep -E '^expiration_time' "${cfg}" | head -1 | cut -d= -f2- | tr -d ' \"')"
+  fi
   if [[ -n "${RUNNER_TEMP:-}" ]]; then
     cp "${cfg}" "${RUNNER_TEMP}/wrangler-before.toml"
   fi
+  if auth_works; then
+    echo "wrangler whoami OK via ${name}"
+    return 0
+  fi
+  echo "  whoami failed via ${name}"
+  return 1
+}
+
+ok=0
+if write_cfg_from_secret && try_source "WRANGLER_CONFIG"; then
+  ok=1
+elif write_cfg_from_enc && try_source "WRANGLER_CONFIG_ENC"; then
+  ok=1
+fi
+
+if [[ "${ok}" -eq 1 ]]; then
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  if [[ -x "${script_dir}/ci_persist_wrangler.sh" ]]; then
+    "${script_dir}/ci_persist_wrangler.sh" || true
+  fi
   exit 0
 fi
-echo "Primary restore failed whoami; trying alternate source..."
-if [[ "${restored}" == "WRANGLER_CONFIG_ENC" ]] && write_cfg_from_secret; then
-  restored="WRANGLER_CONFIG"
-  chmod 600 "${cfg}"
-  if auth_works; then
-    echo "wrangler whoami OK via ${restored}"
-    if [[ -n "${RUNNER_TEMP:-}" ]]; then
-      cp "${cfg}" "${RUNNER_TEMP}/wrangler-before.toml"
-    fi
-    exit 0
-  fi
-fi
-echo "::error::Cloudflare wrangler oauth is expired or revoked (whoami failed)."
-echo "::error::FOUNDER ACTION: create a Cloudflare API token (Account → Pages → Edit) and set DarkLab secret CLOUDFLARE_API_TOKEN,"
-echo "::error::or run 'wrangler login' locally and refresh WRANGLER_CONFIG / WRANGLER_CONFIG_ENC."
+
+echo "::error::Cloudflare wrangler oauth expired and could not be refreshed."
+echo "::error::This is the same login the morning catalogue deploy used; refresh tokens were not persisted after that run."
+echo "::error::Recovery (no API-token UI needed):"
+echo "::error::  1) npx wrangler@4.127.1 login"
+echo "::error::  2) bash DarkLab/scripts/push_cloudflare_login.sh"
+echo "::error::  3) DarkLab Actions → Publish company catalogue → Run workflow"
 cat /tmp/wrangler-whoami.txt >&2 || true
 exit 1

@@ -237,15 +237,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
         run: |
-          cfg="${HOME}/.config/.wrangler/config/default.toml"
-          before="${RUNNER_TEMP}/wrangler-before.toml"
-          if [[ -s "${cfg}" ]] && [[ -f "${before}" ]] && ! cmp -s "${cfg}" "${before}" && grep -q "oauth_token" "${cfg}"; then
-            enc="$(PASS="${GH_TOKEN}" openssl enc -aes-256-cbc -pbkdf2 -salt -base64 -A -pass env:PASS -in "${cfg}")"
-            gh variable set WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware --body "${enc}"
-            for repo in DarkLab SnappyZones SessionGuard WalkAway MarkSweep 8bitEmu; do
-              gh secret set WRANGLER_CONFIG --repo "fgalyasz/${repo}" < "${cfg}"
-            done
-          fi
+          set -euo pipefail
+          chmod +x DarkLab/scripts/ci_persist_wrangler.sh
+          DarkLab/scripts/ci_persist_wrangler.sh force
       - name: Notify on first success or recovery
         if: success()
         working-directory: TenPrintSoftware
