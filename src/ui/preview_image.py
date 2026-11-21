@@ -4,6 +4,7 @@ from PyQt6.QtGui import QColor, QImage, QTransform
 
 from src.develop.crop_settings import CropSettings, crop_box
 
+from src.imaging.basic_tone import BasicTone, apply_basic_tone
 from src.imaging.clipping import clipping_color
 from src.imaging.color_grade import ColorGrade, apply_grade
 from src.imaging.presence import PresenceSettings, apply_presence
@@ -16,6 +17,12 @@ def tone_image(image: QImage, exposure: float, contrast: float) -> QImage:
     result = image.convertToFormat(QImage.Format.Format_RGB32)
     _rewrite_pixels(result, exposure, contrast)
     return result
+
+
+def basic_tone_image(image: QImage, tone: BasicTone) -> QImage:
+    if image.isNull() or tone.is_neutral:
+        return image
+    return _image_from_array(apply_basic_tone(_pixel_array(image), tone))
 
 
 def _rewrite_pixels(image: QImage, exposure: float, contrast: float) -> None:
@@ -71,13 +78,17 @@ def grade_image(
     image: QImage,
     grade: ColorGrade,
     presence: PresenceSettings | None = None,
+    basic: BasicTone | None = None,
 ) -> QImage:
     if image.isNull():
         return image
     presence = presence or PresenceSettings()
-    if grade.is_neutral and presence.is_neutral:
+    basic = basic or BasicTone()
+    if grade.is_neutral and presence.is_neutral and basic.is_neutral:
         return image
     pixels = _pixel_array(image)
+    if not basic.is_neutral:
+        pixels = apply_basic_tone(pixels, basic)
     if not grade.is_neutral:
         pixels = apply_grade(pixels, grade)
     if not presence.is_neutral:

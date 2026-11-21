@@ -1,9 +1,41 @@
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QKeyEvent, QMouseEvent
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QWidget
 
 from src.ui.density import Density
 
 SLIDER_ROW_HEIGHT = 16
+FINE_STEP = 1
+COARSE_STEP = 10
+
+
+class DevelopSlider(QSlider):
+    reset_requested = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__(Qt.Orientation.Horizontal)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSingleStep(FINE_STEP)
+        self.setPageStep(COARSE_STEP)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.reset_requested.emit()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        step = _key_step(event)
+        if step is None:
+            super().keyPressEvent(event)
+            return
+        self.setValue(self.value() + step)
+        event.accept()
 
 
 class SliderRow(QWidget):
@@ -16,7 +48,7 @@ class SliderRow(QWidget):
         self.setFixedHeight(SLIDER_ROW_HEIGHT)
         self.title = title
         self._default = value
-        self._slider = QSlider(Qt.Orientation.Horizontal)
+        self._slider = DevelopSlider()
         self._value_label = QLabel()
         self._build(title, minimum, maximum, value)
 
@@ -43,6 +75,7 @@ class SliderRow(QWidget):
         self._slider.setFixedHeight(12)
         self._slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._slider.valueChanged.connect(self._on_changed)
+        self._slider.reset_requested.connect(self.reset)
         row.addWidget(self._slider, 1)
         self._configure_value_label()
         row.addWidget(self._value_label)
@@ -72,6 +105,15 @@ class SliderRow(QWidget):
             self._value_label.setText(f"{value / 100:+.2f}")
             return
         self._value_label.setText(str(value))
+
+
+def _key_step(event: QKeyEvent) -> int | None:
+    step = COARSE_STEP if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else FINE_STEP
+    if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Down):
+        return -step
+    if event.key() in (Qt.Key.Key_Right, Qt.Key.Key_Up):
+        return step
+    return None
 
 
 def _apply_single_line(label: QLabel) -> None:

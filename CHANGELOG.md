@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Develop Basic tone is live end-to-end: Highlights, Shadows, Whites, and Blacks change the Preview and Export; Texture / Clarity / Dehaze refresh the Preview as you drag. Double-click a slider to reset it; arrow keys nudge by 1, Shift+arrows by 10.
 - Side panels share one chrome: collapsible, rounded corners, and a small gap between sections. Crop no longer nests a second Crop group inside itself.
 - Develop and Library filmstrip thumbnails paint at a fixed cell size again (no ant-wide slivers). A dedicated delegate draws each preview; the file name stays on hover.
 - The macOS DMG now opens a TenPrint-branded drop window: drag `DarkLab.app` onto Applications on the dark maze background (same layout as the other studio installers).

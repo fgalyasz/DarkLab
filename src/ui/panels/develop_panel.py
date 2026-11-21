@@ -31,6 +31,7 @@ from src.ui.panels.base_panel import BasePanel
 from src.ui.themes import StyleSheet
 from src.ui.crop_binding import CropBinding
 from src.ui.white_balance_binding import WhiteBalanceBinding
+from src.imaging.basic_tone import BasicTone
 from src.imaging.color_grade import ColorGrade
 from src.imaging.presence import PresenceSettings
 from src.ui.preview_image import clipping_overlay, crop_preview, grade_image, tone_image
@@ -42,8 +43,6 @@ from src.ui.widgets.histogram_widget import HistogramWidget
 logger = logging.getLogger(__name__)
 SAVE_DELAY_MS = 400
 THUMB_CACHE_LIMIT = 400
-PREVIEW_KEYS = ("Exposure", "Contrast", "Temp", "Tint", "Vibrance", "Saturation")
-
 
 class ThumbRelay(QObject):
     def __init__(self, panel: "DevelopPanel", session: int) -> None:
@@ -201,7 +200,7 @@ class DevelopPanel(BasePanel):
         return self.filmstrip
 
     def _bind_preview_sliders(self) -> None:
-        for row in self._controls.first_named(PREVIEW_KEYS):
+        for row in self._controls.first_named(TONE_KEYS):
             row.changed.connect(self._paint_preview)
 
     def _bind_tone_persistence(self) -> None:
@@ -402,15 +401,14 @@ class DevelopPanel(BasePanel):
 
     def _edited_image(self) -> QImage:
         cropped = crop_preview(self._source_image, self._crop.read())
-        toned = tone_image(cropped, self._slider_value("Exposure"), self._slider_value("Contrast"))
         tone = self._controls.named_values(TONE_KEYS)
-        return grade_image(toned, ColorGrade.from_tone(tone), PresenceSettings.from_tone(tone))
-
-    def _slider_value(self, title: str) -> int:
-        for row in self._controls.sliders:
-            if row.title == title:
-                return row.value()
-        return 0
+        toned = tone_image(cropped, tone.get("Exposure", 0), tone.get("Contrast", 0))
+        return grade_image(
+            toned,
+            ColorGrade.from_tone(tone),
+            PresenceSettings.from_tone(tone),
+            BasicTone.from_tone(tone),
+        )
 
     def _reset_controls(self) -> None:
         self._controls.reset()
