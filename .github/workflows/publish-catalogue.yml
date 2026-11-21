@@ -42,30 +42,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
           WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
+          WRANGLER_BIN: ${{ github.workspace }}/TenPrintSoftware/node_modules/.bin/wrangler
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::ACTIONS_PUSH_TOKEN missing on DarkLab."
-            exit 1
+          if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "CLOUDFLARE_API_TOKEN present; skipping oauth restore."
+            exit 0
           fi
-          cfg_dir="${HOME}/.config/.wrangler/config"
-          mkdir -p "${cfg_dir}"
-          cfg="${cfg_dir}/default.toml"
-          enc="$(gh variable get WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware 2>/dev/null || true)"
-          if [[ -n "${enc}" ]] && printf '%s' "${enc}" | PASS="${GH_TOKEN}" openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:PASS > "${cfg}" 2>/dev/null && [[ -s "${cfg}" ]]; then
-            echo "Restored live Cloudflare login from WRANGLER_CONFIG_ENC"
-          elif [[ -n "${WRANGLER_CONFIG:-}" ]]; then
-            printf '%s\n' "${WRANGLER_CONFIG}" > "${cfg}"
-            echo "Restored Cloudflare login from WRANGLER_CONFIG secret"
-          else
-            echo "::error::No Cloudflare login available."
-            exit 1
-          fi
-          chmod 600 "${cfg}"
-          if ! grep -q "oauth_token" "${cfg}"; then
-            echo "::error::Restored Cloudflare config is missing oauth_token."
-            exit 1
-          fi
+          chmod +x DarkLab/scripts/ci_restore_wrangler.sh
+          DarkLab/scripts/ci_restore_wrangler.sh
       - name: Sync, commit, build, deploy
         working-directory: TenPrintSoftware
         env:
@@ -73,9 +59,14 @@ jobs:
           TENPRINT_ROOT: ${{ github.workspace }}/TenPrintSoftware
         run: |
           set -euo pipefail
-          env -u CLOUDFLARE_API_TOKEN npm run sync:versions
+          npm run sync:versions
           if [[ -n "$(git status --porcelain src/data/products.ts)" ]]; then
             bash ../DarkLab/scripts/ci_commit_release.sh company
           fi
-          env -u CLOUDFLARE_API_TOKEN npm run build
-          env -u CLOUDFLARE_API_TOKEN npm run deploy
+          npm run build
+          if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            npm run deploy
+          else
+            unset CLOUDFLARE_API_TOKEN
+            npm run deploy
+          fi
