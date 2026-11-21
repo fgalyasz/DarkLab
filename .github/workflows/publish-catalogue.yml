@@ -1,0 +1,59 @@
+name: Publish company catalogue
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-catalogue-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fgalyasz/TenPrintSoftware
+          path: TenPrintSoftware
+          ref: main
+          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: TenPrintSoftware/package-lock.json
+      - name: Install
+        working-directory: TenPrintSoftware
+        run: npm ci
+      - name: Restore Cloudflare login
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          WRANGLER_CONFIG: ${{ secrets.WRANGLER_CONFIG }}
+        run: |
+          set -euo pipefail
+          cfg_dir="${HOME}/.config/.wrangler/config"
+          mkdir -p "${cfg_dir}"
+          cfg="${cfg_dir}/default.toml"
+          enc="$(gh variable get WRANGLER_CONFIG_ENC --repo fgalyasz/TenPrintSoftware 2>/dev/null || true)"
+          if [[ -n "${enc}" ]] && printf '%s' "${enc}" | PASS="${GH_TOKEN}" openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:PASS > "${cfg}" 2>/dev/null && [[ -s "${cfg}" ]]; then
+            echo "Restored live Cloudflare login from WRANGLER_CONFIG_ENC"
+          elif [[ -n "${WRANGLER_CONFIG}" ]]; then
+            printf '%s\n' "${WRANGLER_CONFIG}" > "${cfg}"
+            echo "Restored Cloudflare login from WRANGLER_CONFIG secret"
+          fi
+          if [[ -s "${cfg}" ]]; then
+            chmod 600 "${cfg}"
+          fi
+      - name: Build and deploy
+        working-directory: TenPrintSoftware
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm run sync:versions
+          npm run build
+          npm run deploy
