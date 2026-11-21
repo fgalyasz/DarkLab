@@ -152,6 +152,32 @@ class DensityWidgetTests(unittest.TestCase):
     def test_stylesheet_uses_panel_corner_radius(self) -> None:
         self.assertIn(f"border-radius: {Density.PANEL_CORNER_RADIUS_PX}px", StyleSheet.LIGHTROOM)
         self.assertGreaterEqual(Density.PANEL_CORNER_RADIUS_PX, 8)
+        self.assertIn("#collapsibleSection", StyleSheet.LIGHTROOM)
+        self.assertNotIn("border-radius: 0px", StyleSheet.LIGHTROOM.split("#panelHeader")[1].split("}")[0])
+
+    def test_collapsible_section_stylesheet_uses_panel_corner_radius(self) -> None:
+        section = CollapsibleSection("Navigator", QWidget())
+        self.assertIn(f"border-radius: {Density.PANEL_CORNER_RADIUS_PX}px", section.styleSheet())
+        section.close()
+
+    def test_crop_panel_has_no_inner_crop_group(self) -> None:
+        from src.ui.develop_sections import DevelopControls, crop_panel
+
+        panel = crop_panel(DevelopControls())
+        self.assertEqual(panel.findChildren(DevelopGroup), [])
+        panel.close()
+
+    def test_develop_sections_do_not_nest_same_title(self) -> None:
+        from PyQt6.QtWidgets import QLabel
+        from src.ui.panels.develop_panel import DevelopPanel
+
+        panel = DevelopPanel()
+        for section in panel.findChildren(CollapsibleSection):
+            title = section.header().findChild(QLabel, "panelTitle").text()
+            nested = [group.title() for group in section.findChildren(DevelopGroup)]
+            self.assertNotIn(title, nested, nested)
+        panel._cancel_load()
+        panel.close()
 
     def test_develop_groups_collapse_like_classic(self) -> None:
         group = DevelopGroup("Tone")

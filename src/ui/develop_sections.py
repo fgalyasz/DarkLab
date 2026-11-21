@@ -146,12 +146,10 @@ def transform_panel(controls: DevelopControls) -> QWidget:
 def crop_panel(controls: DevelopControls) -> QWidget:
     panel = _panel()
     layout = _layout(panel)
-    group, inner = _group("Crop")
     for title in ("Left", "Top", "Right", "Bottom"):
-        inner.addWidget(controls.slider(title, 0, MAX_EDGE, 0))
-    inner.addWidget(controls.slider("Angle", -MAX_ANGLE, MAX_ANGLE, 0))
-    inner.addWidget(controls.crop_lock)
-    layout.addWidget(group)
+        layout.addWidget(controls.slider(title, 0, MAX_EDGE, 0))
+    layout.addWidget(controls.slider("Angle", -MAX_ANGLE, MAX_ANGLE, 0))
+    layout.addWidget(controls.crop_lock)
     _finish(layout)
     return panel
 

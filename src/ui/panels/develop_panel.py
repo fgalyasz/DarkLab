@@ -132,8 +132,8 @@ class DevelopPanel(BasePanel):
     def _tool_stack(self) -> QWidget:
         stack = QWidget()
         layout = QVBoxLayout(stack)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
         self.histogram = HistogramWidget()
         layout.addWidget(CollapsibleSection("Histogram", self.histogram))
         layout.addWidget(_tool_row())

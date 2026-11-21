@@ -144,14 +144,21 @@ class StyleSheet:
         }}
         QProgressBar::chunk {{ background-color: rgb(168, 168, 168); }}
         #panelColumn {{ background-color: rgb(45, 45, 45); }}
+        #collapsibleSection {{
+            background-color: rgb(36, 36, 36);
+            border: 1px solid rgb(18, 18, 18);
+            border-bottom: 2px solid rgb(8, 8, 8);
+            border-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
+        }}
         #panelHeader {{
-            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(82, 82, 82), stop:1 rgb(54, 54, 54));
-            border-top: 1px solid rgb(104, 104, 104);
-            border-bottom: 1px solid rgb(16, 16, 16);
-            border-radius: 0px;
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(98, 98, 98), stop:1 rgb(58, 58, 58));
+            border: none;
+            border-bottom: 1px solid rgb(12, 12, 12);
+            border-top-left-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
+            border-top-right-radius: {Density.PANEL_CORNER_RADIUS_PX}px;
         }}
         #panelTitle {{
-            color: rgb(236, 236, 236);
+            color: rgb(242, 242, 242);
             font-size: {Density.HEADER_PX}px;
             font-weight: 600;
             background: transparent;

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Side panels share one chrome: collapsible, rounded corners, and a small gap between sections. Crop no longer nests a second Crop group inside itself.
 - Develop and Library filmstrip thumbnails paint at a fixed cell size again (no ant-wide slivers). A dedicated delegate draws each preview; the file name stays on hover.
 - The macOS DMG now opens a TenPrint-branded drop window: drag `DarkLab.app` onto Applications on the dark maze background (same layout as the other studio installers).
 - Classic density pass: compact 11px chrome, tighter module bar and panel headers, single-line Develop sliders, elided Library metadata, smaller color-grading wheels, quieter placeholder modules, and near-square 2px controls so the shell reads closer to Lightroom Classic without claiming Adobe pixel chrome.

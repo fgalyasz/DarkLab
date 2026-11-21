@@ -86,6 +86,8 @@ class CollapsibleSection(QWidget):
         fill: bool = False,
     ) -> None:
         super().__init__()
+        self.setObjectName("collapsibleSection")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._content = content
         self._expanded = expanded
         self._fill = fill
@@ -115,6 +117,7 @@ class CollapsibleSection(QWidget):
     def _apply_expanded(self) -> None:
         self._content.setVisible(self._expanded)
         self._header.set_expanded(self._expanded)
+        self._header.setStyleSheet(_header_radius_style(self._expanded))
         self._apply_size_policy()
         self.toggled.emit(self._expanded)
         self._relayout_ancestors()
@@ -145,8 +148,8 @@ class PanelColumn(QWidget):
         super().__init__()
         self._entries: list[tuple[CollapsibleSection, int]] = []
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
+        self._layout.setContentsMargins(4, 4, 4, 4)
+        self._layout.setSpacing(4)
         self.setObjectName("panelColumn")
 
     def add_section(self, section: CollapsibleSection, stretch: int = 0) -> None:
@@ -161,12 +164,28 @@ class PanelColumn(QWidget):
 
 
 def _section_style() -> str:
+    radius = Density.PANEL_CORNER_RADIUS_PX
     return (
+        "#collapsibleSection {"
+        " background-color: rgb(36, 36, 36);"
+        " border: 1px solid rgb(18, 18, 18);"
+        " border-bottom: 2px solid rgb(8, 8, 8);"
+        f" border-radius: {radius}px; }}"
         "#panelHeader {"
-        " background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(82, 82, 82), stop:1 rgb(54, 54, 54));"
-        " border-top: 1px solid rgb(104, 104, 104); border-bottom: 1px solid rgb(16, 16, 16);"
-        " border-radius: 0px; }"
-        f"#panelTitle {{ color: rgb(236, 236, 236); font-size: {Density.HEADER_PX}px;"
+        " background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(98, 98, 98), stop:1 rgb(58, 58, 58));"
+        " border: none; border-bottom: 1px solid rgb(12, 12, 12); }"
+        f"#panelTitle {{ color: rgb(242, 242, 242); font-size: {Density.HEADER_PX}px;"
         " font-weight: 600; background: transparent; }"
         "#panelColumn { background-color: rgb(45, 45, 45); }"
     )
+
+
+def _header_radius_style(expanded: bool) -> str:
+    radius = Density.PANEL_CORNER_RADIUS_PX
+    if expanded:
+        return (
+            "#panelHeader {"
+            f" border-top-left-radius: {radius}px; border-top-right-radius: {radius}px;"
+            " border-bottom-left-radius: 0px; border-bottom-right-radius: 0px; }"
+        )
+    return f"#panelHeader {{ border-radius: {radius}px; border-bottom: none; }}"
