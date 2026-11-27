@@ -1,8 +1,12 @@
-from PyQt6.QtCore import QPoint
+from PyQt6.QtCore import QPoint, QRect
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPolygon
 from PyQt6.QtWidgets import QWidget
 
 BIN_COUNT = 64
+PAD = 6
+SURFACE = QColor(80, 80, 80)
+WELL_FILL = QColor(60, 60, 60)
+WELL_BORDER = QColor(24, 24, 24)
 
 
 def empty_channel() -> list[int]:
@@ -44,33 +48,44 @@ class HistogramWidget(QWidget):
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(28, 28, 28))
-        self._paint_channel(painter, self._bins[0], QColor(180, 50, 50, 160))
-        self._paint_channel(painter, self._bins[1], QColor(50, 160, 70, 140))
-        self._paint_channel(painter, self._bins[2], QColor(60, 110, 200, 140))
+        painter.fillRect(self.rect(), SURFACE)
+        well = self._well_rect()
+        painter.fillRect(well, WELL_FILL)
+        painter.setPen(QPen(WELL_BORDER, 1))
+        painter.drawRect(well.adjusted(0, 0, -1, -1))
+        self._paint_channels(painter, well)
         painter.end()
 
-    def _paint_channel(self, painter: QPainter, values: list[int], color: QColor) -> None:
-        peak = max(values) if any(values) else 1
-        polygon = QPolygon(self._channel_points(values, peak))
+    def _well_rect(self) -> QRect:
+        return self.rect().adjusted(PAD, PAD, -PAD, -PAD)
+
+    def _paint_channels(self, painter: QPainter, well: QRect) -> None:
+        self._paint_channel(painter, well, self._bins[0], QColor(180, 50, 50, 160))
+        self._paint_channel(painter, well, self._bins[1], QColor(50, 160, 70, 140))
+        self._paint_channel(painter, well, self._bins[2], QColor(60, 110, 200, 140))
+
+    def _paint_channel(self, painter: QPainter, well: QRect, values: list[int], color: QColor) -> None:
+        if not any(values):
+            return
+        peak = max(values)
+        polygon = QPolygon(self._channel_points(well, values, peak))
         painter.setPen(QPen(color, 1))
         painter.setBrush(color)
         painter.drawPolygon(polygon)
 
-    def _channel_points(self, values: list[int], peak: int) -> list[QPoint]:
-        width = max(1, self.width() - 8)
-        height = max(1, self.height() - 8)
-        points = [QPoint(4, self.height() - 4)]
-        points.extend(self._curve_points(values, peak, width, height))
-        points.append(QPoint(4 + width, self.height() - 4))
+    def _channel_points(self, well: QRect, values: list[int], peak: int) -> list[QPoint]:
+        inner = well.adjusted(2, 2, -2, -2)
+        points = [QPoint(inner.left(), inner.bottom())]
+        points.extend(self._curve_points(inner, values, peak))
+        points.append(QPoint(inner.right(), inner.bottom()))
         return points
 
-    def _curve_points(self, values: list[int], peak: int, width: int, height: int) -> list[QPoint]:
+    def _curve_points(self, inner: QRect, values: list[int], peak: int) -> list[QPoint]:
         points: list[QPoint] = []
-        last = len(values) - 1
+        last = max(1, len(values) - 1)
         for index, value in enumerate(values):
-            x = 4 + int(index / max(1, last) * width)
-            y = self.height() - 4 - int(value / peak * height)
+            x = inner.left() + int(index / last * max(1, inner.width()))
+            y = inner.bottom() - int(value / peak * max(1, inner.height()))
             points.append(QPoint(x, y))
         return points
 

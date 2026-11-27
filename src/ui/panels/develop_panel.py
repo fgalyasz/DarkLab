@@ -92,15 +92,15 @@ class DevelopPanel(BasePanel):
 
     def _left_column(self) -> PanelColumn:
         column = PanelColumn()
-        self.navigator = _empty_preview("No photo")
+        self.navigator = _navigator_preview("No photo")
         self.navigator.setMinimumHeight(140)
-        column.add_section(CollapsibleSection("Navigator", self.navigator))
-        column.add_section(CollapsibleSection("Presets", presets_panel(self._controls), fill=True), 1)
-        column.add_section(CollapsibleSection("Snapshots", _note("No snapshots"), expanded=False))
+        column.add_section(CollapsibleSection("Navigator", self.navigator, arrow_on_left=True))
+        column.add_section(CollapsibleSection("Presets", presets_panel(self._controls), arrow_on_left=True, fill=True), 1)
+        column.add_section(CollapsibleSection("Snapshots", _note("No snapshots"), expanded=False, arrow_on_left=True))
         self.history_widget = history_list()
         self.history_widget.currentRowChanged.connect(self._on_history_selected)
-        column.add_section(CollapsibleSection("History", self.history_widget))
-        column.add_section(CollapsibleSection("Collections", collections_tree(), expanded=False))
+        column.add_section(CollapsibleSection("History", self.history_widget, arrow_on_left=True))
+        column.add_section(CollapsibleSection("Collections", collections_tree(), expanded=False, arrow_on_left=True))
         return column
 
     def _center_column(self) -> QWidget:
@@ -130,9 +130,10 @@ class DevelopPanel(BasePanel):
 
     def _tool_stack(self) -> QWidget:
         stack = QWidget()
+        stack.setObjectName("toolStack")
         layout = QVBoxLayout(stack)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(2)
         self.histogram = HistogramWidget()
         layout.addWidget(CollapsibleSection("Histogram", self.histogram))
         layout.addWidget(_tool_row())
@@ -182,15 +183,15 @@ class DevelopPanel(BasePanel):
 
     def _previous_reset(self) -> QWidget:
         bar = QWidget()
+        bar.setObjectName("panelActionBar")
+        bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         row = QHBoxLayout(bar)
         row.setContentsMargins(4, 4, 4, 4)
         row.setSpacing(4)
-        previous = QPushButton("Previous")
-        reset = QPushButton("Reset")
-        previous.clicked.connect(self._restore_previous)
-        reset.clicked.connect(self._reset_controls)
-        row.addWidget(previous)
-        row.addWidget(reset)
+        previous = _action_button("Previous", self._restore_previous)
+        reset = _action_button("Reset", self._reset_controls)
+        row.addWidget(previous, 1)
+        row.addWidget(reset, 1)
         return bar
 
     def _build_filmstrip(self) -> FilmstripWidget:
@@ -440,8 +441,25 @@ def _save_timer() -> QTimer:
 def _empty_preview(text: str) -> QLabel:
     label = QLabel(text)
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    label.setStyleSheet("background-color: rgb(28, 28, 28); color: rgb(170, 170, 170);")
+    label.setStyleSheet("background-color: rgb(51, 51, 51); color: rgb(184, 184, 184);")
     return label
+
+
+def _navigator_preview(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    label.setStyleSheet(
+        "background-color: rgb(60, 60, 60); color: rgb(180, 180, 180);"
+        " border: 1px solid rgb(24, 24, 24); margin: 6px;"
+    )
+    return label
+
+
+def _action_button(title: str, handler) -> QPushButton:
+    button = QPushButton(title)
+    button.setObjectName("panelActionButton")
+    button.clicked.connect(handler)
+    return button
 
 
 def _info_label(size: int) -> QLabel:
@@ -463,13 +481,15 @@ def _first_visible(paths: list[Path]) -> Path | None:
 
 def _tool_row() -> QWidget:
     row = QWidget()
+    row.setObjectName("toolStrip")
+    row.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     layout = QHBoxLayout(row)
     layout.setContentsMargins(4, 2, 4, 2)
-    layout.setSpacing(3)
+    layout.setSpacing(2)
     for title in ("Crop", "Spot", "Red Eye", "Mask"):
         button = QPushButton(title)
         button.setMinimumWidth(0)
-        layout.addWidget(button)
+        layout.addWidget(button, 1)
     return row
 
 

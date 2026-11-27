@@ -149,11 +149,12 @@ class DensityWidgetTests(unittest.TestCase):
         self.assertEqual(section.header().height(), Density.PANEL_HEADER_HEIGHT)
         section.close()
 
-    def test_stylesheet_uses_panel_corner_radius(self) -> None:
+    def test_stylesheet_uses_classic_flat_panel_chrome(self) -> None:
+        self.assertEqual(Density.PANEL_CORNER_RADIUS_PX, 0)
         self.assertIn(f"border-radius: {Density.PANEL_CORNER_RADIUS_PX}px", StyleSheet.LIGHTROOM)
-        self.assertGreaterEqual(Density.PANEL_CORNER_RADIUS_PX, 8)
         self.assertIn("#collapsibleSection", StyleSheet.LIGHTROOM)
-        self.assertNotIn("border-radius: 0px", StyleSheet.LIGHTROOM.split("#panelHeader")[1].split("}")[0])
+        self.assertIn("background-color: rgb(80, 80, 80)", StyleSheet.LIGHTROOM)
+        self.assertIn("background-color: rgb(50, 50, 50)", StyleSheet.LIGHTROOM)
 
     def test_collapsible_section_stylesheet_uses_panel_corner_radius(self) -> None:
         section = CollapsibleSection("Navigator", QWidget())

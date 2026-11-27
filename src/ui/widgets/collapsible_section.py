@@ -5,13 +5,14 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidg
 from src.ui.density import Density
 
 HEADER_HEIGHT = Density.PANEL_HEADER_HEIGHT
+TRIANGLE_COLOR = QColor(186, 186, 186)
 
 
 class DisclosureTriangle(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._expanded = True
-        self.setFixedSize(14, 14)
+        self.setFixedSize(12, 12)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
     def set_expanded(self, expanded: bool) -> None:
@@ -22,14 +23,14 @@ class DisclosureTriangle(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(214, 214, 214))
+        painter.setBrush(TRIANGLE_COLOR)
         painter.drawPolygon(QPolygon(self._points()))
         painter.end()
 
     def _points(self) -> list[QPoint]:
         if self._expanded:
-            return [QPoint(2, 4), QPoint(12, 4), QPoint(7, 10)]
-        return [QPoint(4, 2), QPoint(4, 12), QPoint(10, 7)]
+            return [QPoint(2, 4), QPoint(10, 4), QPoint(6, 9)]
+        return [QPoint(4, 2), QPoint(4, 10), QPoint(9, 6)]
 
 
 class PanelHeader(QWidget):
@@ -37,12 +38,17 @@ class PanelHeader(QWidget):
 
     def __init__(self, title: str, arrow_on_left: bool) -> None:
         super().__init__()
+        self._arrow_on_left = arrow_on_left
         self._triangle = DisclosureTriangle()
         self.setFixedHeight(HEADER_HEIGHT)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setObjectName("panelHeader")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._build(title, arrow_on_left)
+
+    @property
+    def arrow_on_left(self) -> bool:
+        return self._arrow_on_left
 
     def set_expanded(self, expanded: bool) -> None:
         self._triangle.set_expanded(expanded)
@@ -54,16 +60,16 @@ class PanelHeader(QWidget):
 
     def _build(self, title: str, arrow_on_left: bool) -> None:
         row = QHBoxLayout(self)
-        row.setContentsMargins(6, 0, 6, 0)
-        row.setSpacing(4)
+        row.setContentsMargins(8, 0, 8, 0)
+        row.setSpacing(6)
         title_label = self._title(title)
         if arrow_on_left:
             row.addWidget(self._triangle)
             row.addWidget(title_label)
             row.addStretch()
             return
-        row.addWidget(title_label)
         row.addStretch()
+        row.addWidget(title_label)
         row.addWidget(self._triangle)
 
     def _title(self, title: str) -> QLabel:
@@ -108,7 +114,7 @@ class CollapsibleSection(QWidget):
 
     def _build(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(1, 1, 1, 1)
         layout.setSpacing(0)
         layout.addWidget(self._header)
         layout.addWidget(self._content, 1 if self._fill else 0)
@@ -117,7 +123,7 @@ class CollapsibleSection(QWidget):
     def _apply_expanded(self) -> None:
         self._content.setVisible(self._expanded)
         self._header.set_expanded(self._expanded)
-        self._header.setStyleSheet(_header_radius_style(self._expanded))
+        self._header.setStyleSheet(_header_edge_style(self._expanded))
         self._apply_size_policy()
         self.toggled.emit(self._expanded)
         self._relayout_ancestors()
@@ -148,9 +154,10 @@ class PanelColumn(QWidget):
         super().__init__()
         self._entries: list[tuple[CollapsibleSection, int]] = []
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(4, 4, 4, 4)
-        self._layout.setSpacing(4)
+        self._layout.setContentsMargins(4, 2, 4, 2)
+        self._layout.setSpacing(2)
         self.setObjectName("panelColumn")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
     def add_section(self, section: CollapsibleSection, stretch: int = 0) -> None:
         self._entries.append((section, stretch))
@@ -167,25 +174,20 @@ def _section_style() -> str:
     radius = Density.PANEL_CORNER_RADIUS_PX
     return (
         "#collapsibleSection {"
-        " background-color: rgb(36, 36, 36);"
-        " border: 1px solid rgb(18, 18, 18);"
-        " border-bottom: 2px solid rgb(8, 8, 8);"
+        " background-color: rgb(80, 80, 80);"
+        " border: 1px solid rgb(14, 14, 14);"
         f" border-radius: {radius}px; }}"
         "#panelHeader {"
-        " background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgb(98, 98, 98), stop:1 rgb(58, 58, 58));"
-        " border: none; border-bottom: 1px solid rgb(12, 12, 12); }"
-        f"#panelTitle {{ color: rgb(242, 242, 242); font-size: {Density.HEADER_PX}px;"
-        " font-weight: 600; background: transparent; }"
-        "#panelColumn { background-color: rgb(45, 45, 45); }"
+        " background-color: rgb(50, 50, 50);"
+        " border: none; border-top: 1px solid rgb(62, 62, 62);"
+        " border-bottom: 1px solid rgb(12, 12, 12); }"
+        f"#panelTitle {{ color: rgb(210, 210, 210); font-size: {Density.HEADER_PX}px;"
+        " font-weight: 500; background: transparent; }"
+        "#panelColumn { background-color: rgb(50, 50, 50); }"
     )
 
 
-def _header_radius_style(expanded: bool) -> str:
+def _header_edge_style(expanded: bool) -> str:
     radius = Density.PANEL_CORNER_RADIUS_PX
-    if expanded:
-        return (
-            "#panelHeader {"
-            f" border-top-left-radius: {radius}px; border-top-right-radius: {radius}px;"
-            " border-bottom-left-radius: 0px; border-bottom-right-radius: 0px; }"
-        )
-    return f"#panelHeader {{ border-radius: {radius}px; border-bottom: none; }}"
+    bottom = "1px solid rgb(12, 12, 12)" if expanded else "none"
+    return f"#panelHeader {{ border-radius: {radius}px; border-bottom: {bottom}; }}"

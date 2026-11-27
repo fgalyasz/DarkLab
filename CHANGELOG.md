@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Classic darkroom panel design across Develop and Library: flat matte charcoal headers (`rgb(50, 50, 50)`) with left-column / right-column disclosure alignment, neutral gray panel bodies (`rgb(80, 80, 80)`), sharp edges, full-width etched bevel dividers plus subtle intra-group hairlines in Tone and Presence, custom upward-pointing pentagon slider pointers with upper tick marks, right-aligned slider labels and signed numeric readouts, slim dark-track scrollbars, matte tool strip and Previous/Reset bar, near-black module bar with separators, and neutral filmstrip active frames (FR-116..FR-119).
 - Develop Basic tone is live end-to-end: Highlights, Shadows, Whites, and Blacks change the Preview and Export; Texture / Clarity / Dehaze refresh the Preview as you drag. Double-click a slider to reset it; arrow keys nudge by 1, Shift+arrows by 10.
 - Side panels share one chrome: collapsible, rounded corners, and a small gap between sections. Crop no longer nests a second Crop group inside itself.
 - Develop and Library filmstrip thumbnails paint at a fixed cell size again (no ant-wide slivers). A dedicated delegate draws each preview; the file name stays on hover.

@@ -36,6 +36,7 @@ from src.ui.widgets.collapsible_section import CollapsibleSection, PanelColumn
 from src.ui.widgets.filmstrip_widget import FilmstripWidget
 from src.ui.widgets.grid_image_widget import GridImageWidget
 from src.ui.widgets.histogram_widget import HistogramWidget
+from src.ui.widgets.slider_row import DevelopSlider
 
 
 logger = logging.getLogger(__name__)
@@ -129,11 +130,11 @@ class LibraryBrowserPanel(BasePanel):
         self.folders.relink_requested.connect(self._relink_folder)
         self.collections = self._static_list(["Quick Collection"])
         self.publish = self._static_list(["Hard Drive", "Flickr"])
-        column.add_section(CollapsibleSection("Navigator", self.navigator))
-        column.add_section(CollapsibleSection("Catalog", self.catalog))
-        column.add_section(CollapsibleSection("Folders", self.folders, fill=True), 1)
-        column.add_section(CollapsibleSection("Collections", self.collections))
-        column.add_section(CollapsibleSection("Publish Services", self.publish))
+        column.add_section(CollapsibleSection("Navigator", self.navigator, arrow_on_left=True))
+        column.add_section(CollapsibleSection("Catalog", self.catalog, arrow_on_left=True))
+        column.add_section(CollapsibleSection("Folders", self.folders, arrow_on_left=True, fill=True), 1)
+        column.add_section(CollapsibleSection("Collections", self.collections, arrow_on_left=True))
+        column.add_section(CollapsibleSection("Publish Services", self.publish, arrow_on_left=True))
         return column
 
     def _center_column(self) -> QWidget:
@@ -160,7 +161,10 @@ class LibraryBrowserPanel(BasePanel):
         label = QLabel("No photo selected")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setMinimumHeight(150)
-        label.setStyleSheet("background-color: rgb(28, 28, 28); color: rgb(160, 160, 160);")
+        label.setStyleSheet(
+            "background-color: rgb(60, 60, 60); color: rgb(180, 180, 180);"
+            " border: 1px solid rgb(24, 24, 24); margin: 6px;"
+        )
         return label
 
     def _catalog_list(self) -> QListWidget:
@@ -254,7 +258,11 @@ class LibraryBrowserPanel(BasePanel):
 
     def _quick_develop(self) -> QWidget:
         panel = QWidget()
+        panel.setObjectName("panelBody")
         form = QFormLayout(panel)
+        form.setContentsMargins(8, 6, 8, 6)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(2)
         self.exposure_slider = self._tone_slider()
         self.contrast_slider = self._tone_slider()
         reset = QPushButton("Reset")
@@ -265,7 +273,7 @@ class LibraryBrowserPanel(BasePanel):
         return panel
 
     def _tone_slider(self) -> QSlider:
-        slider = QSlider(Qt.Orientation.Horizontal)
+        slider = DevelopSlider()
         slider.setRange(-100, 100)
         slider.setValue(0)
         slider.valueChanged.connect(self._apply_tone)
@@ -285,8 +293,9 @@ class LibraryBrowserPanel(BasePanel):
 
     def _metadata_form(self) -> QWidget:
         panel = QWidget()
+        panel.setObjectName("panelBody")
         form = QFormLayout(panel)
-        form.setContentsMargins(6, 4, 6, 4)
+        form.setContentsMargins(8, 6, 8, 6)
         form.setHorizontalSpacing(8)
         form.setVerticalSpacing(2)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)

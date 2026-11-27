@@ -9,8 +9,10 @@ ICON_SIZE = QSize(96, 72)
 STRIP_HEIGHT = 110
 NEARBY_CELLS = 8
 PAD = 4
-SELECTED = QColor(0, 122, 255)
-HOVER = QColor(70, 70, 70)
+SELECTED = QColor(190, 190, 190)
+HOVER = QColor(96, 96, 96)
+CELL_FILL = QColor(62, 62, 62)
+CELL_BORDER = QColor(28, 28, 28)
 
 
 class FilmstripModel(QAbstractListModel):
@@ -100,6 +102,10 @@ class FilmstripWidget(QListView):
         self.setIconSize(ICON_SIZE)
         self.setSpacing(6)
         self.setFixedHeight(STRIP_HEIGHT)
+        self.setStyleSheet(
+            "QListView { background-color: rgb(44, 44, 44); border: none;"
+            " border-top: 1px solid rgb(12, 12, 12); }"
+        )
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setWordWrap(False)
@@ -181,6 +187,10 @@ def _paint_cell_background(painter: QPainter, option: QStyleOptionViewItem) -> N
         painter.fillRect(option.rect, SELECTED)
     elif option.state & QStyle.StateFlag.State_MouseOver:
         painter.fillRect(option.rect, HOVER)
+    else:
+        painter.fillRect(option.rect, CELL_FILL)
+    painter.setPen(CELL_BORDER)
+    painter.drawRect(option.rect.adjusted(0, 0, -1, -1))
 
 
 def _centered(area: QRect, size: QSize) -> QRect:
