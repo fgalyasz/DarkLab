@@ -34,19 +34,29 @@ def _catalog_with_photo() -> tuple[Path, Path]:
     return catalog, original
 
 
-def _library(catalog: Path):
+def _close_widget(widget) -> None:
+    widget.close()
+    widget.deleteLater()
+    APP.processEvents()
+
+
+def _library(catalog: Path, case: unittest.TestCase | None = None):
     from src.ui.panels.library_browser_panel import LibraryBrowserPanel
     panel = LibraryBrowserPanel()
     panel.show_catalog(catalog)
     panel._cancel_load()
+    if case is not None:
+        case.addCleanup(_close_widget, panel)
     return panel
 
 
-def _develop(catalog: Path):
+def _develop(catalog: Path, case: unittest.TestCase | None = None):
     from src.ui.panels.develop_panel import DevelopPanel
     panel = DevelopPanel()
     panel.show_catalog(catalog)
     panel._cancel_load()
+    if case is not None:
+        case.addCleanup(_close_widget, panel)
     return panel
 
 
@@ -111,7 +121,7 @@ class LibraryMarksTests(unittest.TestCase):
         self.index = list_index_images(self.catalog)[0]
 
     def test_grid_change_is_stored_in_the_catalog(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         panel.grid.selected_images = [self.index]
         panel.grid._set_marker_for_selected("rating", "3")
         panel.grid._set_marker_for_selected("pick", "rejected")
@@ -121,39 +131,39 @@ class LibraryMarksTests(unittest.TestCase):
     def test_marks_return_after_restart(self) -> None:
         write_mark(self.catalog, 1, "rating", "2")
         write_mark(self.catalog, 1, "color", "green")
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         self.assertEqual(panel.grid.image_markers[self.index]["rating"], "2")
         self.assertEqual(panel.grid.image_markers[self.index]["color"], "green")
 
     def test_other_photos_show_no_marks(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         self.assertNotIn(self.index, panel.grid.image_markers)
 
     def test_no_catalog_has_no_markers(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         panel.show_catalog(None)
         self.assertEqual(panel.grid.image_markers, {})
 
     def test_change_without_a_catalog_is_ignored(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         panel.show_catalog(None)
         panel._on_marker_changed(self.index, "rating", "5")
         self.assertEqual(read_photo_marks(self.catalog, 1), NO_MARKS)
 
     def test_change_for_a_file_outside_the_catalog_is_ignored(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         panel._on_marker_changed(self.original, "rating", "5")
         self.assertEqual(read_photo_marks(self.catalog, 1), NO_MARKS)
 
     def test_failed_save_is_logged_and_not_raised(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         with patch(WRITE_ERROR, side_effect=sqlite3.OperationalError("locked")):
             with self.assertLogs("src.ui.panels.library_browser_panel", level="ERROR") as logged:
                 panel._on_marker_changed(self.index, "rating", "5")
         self.assertIn("locked", logged.output[0])
 
     def test_invalid_value_is_logged_and_not_stored(self) -> None:
-        panel = _library(self.catalog)
+        panel = _library(self.catalog, self)
         with self.assertLogs("src.ui.panels.library_browser_panel", level="ERROR"):
             panel._on_marker_changed(self.index, "rating", "9")
         self.assertEqual(read_photo_marks(self.catalog, 1), NO_MARKS)
@@ -165,33 +175,33 @@ class DevelopMarksTests(unittest.TestCase):
         self.index = index_image_path(self.catalog, 1)
 
     def test_develop_shows_the_marks_set_in_library(self) -> None:
-        library = _library(self.catalog)
+        library = _library(self.catalog, self)
         library._on_marker_changed(self.index, "rating", "3")
         library._on_marker_changed(self.index, "pick", "accepted")
         library._on_marker_changed(self.index, "color", "red")
-        develop = _develop(self.catalog)
+        develop = _develop(self.catalog, self)
         develop._show_photo(self.index)
         self.assertEqual(develop.marks_label.text(), "★★★☆☆   Pick   Red")
 
     def test_develop_shows_empty_stars_without_marks(self) -> None:
-        develop = _develop(self.catalog)
+        develop = _develop(self.catalog, self)
         develop._show_photo(self.index)
         self.assertEqual(develop.marks_label.text(), "☆☆☆☆☆")
 
     def test_develop_clears_marks_for_a_file_outside_the_catalog(self) -> None:
-        develop = _develop(self.catalog)
+        develop = _develop(self.catalog, self)
         develop._show_photo(self.original)
         self.assertEqual(develop.marks_label.text(), "")
 
     def test_showing_develop_refreshes_the_marks(self) -> None:
-        develop = _develop(self.catalog)
+        develop = _develop(self.catalog, self)
         develop._show_photo(self.index)
         write_mark(self.catalog, 1, "rating", "5")
         develop.show()
         self.assertEqual(develop.marks_label.text(), "★★★★★")
 
     def test_marks_without_a_catalog_are_blank(self) -> None:
-        develop = _develop(self.catalog)
+        develop = _develop(self.catalog, self)
         develop._show_photo(self.index)
         develop.show_catalog(None)
         develop._show_marks()

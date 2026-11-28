@@ -134,6 +134,8 @@ class ProgressReporterTests(unittest.TestCase):
         self.assertEqual(reporter.value, 2)
         reporter.close()
         parent.close()
+        parent.deleteLater()
+        APP.processEvents()
 
 
 if __name__ == "__main__":

@@ -35,6 +35,12 @@ def _catalog_with_photo() -> tuple[Path, Path]:
     return catalog, original
 
 
+def _close_widget(widget) -> None:
+    widget.close()
+    widget.deleteLater()
+    APP.processEvents()
+
+
 def _panel(catalog: Path):
     from src.ui.panels.develop_panel import DevelopPanel
     panel = DevelopPanel()
@@ -175,6 +181,7 @@ class DevelopPanelToneTests(unittest.TestCase):
 
     def test_hiding_the_panel_flushes_a_pending_save(self) -> None:
         panel = _panel(self.catalog)
+        self.addCleanup(_close_widget, panel)
         panel.show()
         panel._show_photo(self.index)
         _slider(panel, "Exposure").set_value(70)
